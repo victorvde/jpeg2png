@@ -10,6 +10,8 @@
 #include <jpeglib.h>
 #include <png.h>
 
+#include <fftw3.h>
+
 static noreturn void die(const char *msg, ...)  {
         if(msg) {
                 fprintf(stderr, "jpeg2png: ");
@@ -123,9 +125,9 @@ static void write_png(FILE *out, int w, int h, float *y, float *cb, float *cr) {
         png_destroy_write_struct(&png_ptr, &info_ptr);
 }
 
-static void element_product(int16_t data[64], const uint16_t quant_table[64]) {
+static void element_product(const int16_t data[64], const uint16_t quant_table[64], float *out) {
         for(int i = 0; i < 64; i++) {
-                data[i] *= quant_table[i];
+                out[i] = data[i] * quant_table[i];
         }
 }
 
@@ -134,24 +136,6 @@ static float a(int n) {
                 return 1./sqrt(2.);
         } else {
                 return 1.;
-        }
-}
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-static void idct(int16_t data[64], float out[64]) {
-        // super slow idct
-        for(int y = 0; y < 8; y++) {
-                for(int x = 0; x < 8; x++) {
-                        float sum = 0.;
-                        for(int u = 0; u < 8; u++) {
-                                for(int v = 0; v < 8; v++) {
-                                        sum += a(u) * a(v) * data[v*8+u] * cos((2*x+1)*u*M_PI / 16.) * cos((2*y+1)*v*M_PI / 16.);
-                                }
-                        }
-                        out[y*8+x] = sum / 4.;
-                }
         }
 }
 
@@ -190,16 +174,29 @@ int main(int argc, char *argv[]) {
                 struct coef *coef = &jpeg.coefs[c];
                 if(coef->h < h) { die("channel %d too short! %d", c, coef->h); }
                 if(coef->w < w) { die("channel %d too thin! %d", c, coef->w); }
-                coef->fdata = calloc(coef->h * coef->w, sizeof(float));
+                coef->fdata = fftwf_alloc_real(coef->h * coef->w);
                 if(!coef->fdata) { die("allocation error"); }
-                int16_t *d = coef->data;
-                float *f = coef->fdata;
-                for(int y = 0; y < coef->h; y += 8) {
-                        for(int x = 0; x < coef->w; x += 8) {
-                                element_product(d, jpeg.quant_table[c]);
-                                idct(d, f);
-                                d += 64;
-                                f += 64;
+                int blocks_y = (coef->h + 7) / 8;
+                int blocks_x = (coef->w + 7) / 8;
+                int blocks = blocks_y * blocks_x;
+                for(int i = 0; i < blocks; i++) {
+                        element_product(&coef->data[i*64], jpeg.quant_table[c], &coef->fdata[i*64]);
+                        for(int v = 0; v < 8; v++) {
+                                for(int u = 0; u < 8; u++) {
+                                        coef->fdata[i*64 + v*8+u] /= a(u) * a(v);
+                                }
+                        }
+                }
+                fftwf_plan p = fftwf_plan_many_r2r(
+                        2, (int[]){8, 8}, blocks,
+                        coef->fdata, (int[]){8, 8}, 1, 64,
+                        coef->fdata, (int[]){8, 8}, 1, 64,
+                        (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
+                fftwf_execute(p);
+                fftwf_destroy_plan(p);
+                for(int i = 0; i < blocks; i++) {
+                        for(int j = 0; j < 64; j++) {
+                                coef->fdata[i*64 + j] /= 16.;
                         }
                 }
         }
@@ -207,11 +204,11 @@ int main(int argc, char *argv[]) {
         puts("unboxing");
         for(int i = 0; i < 3; i++) {
                 struct coef *coef = &jpeg.coefs[i];
-                float *temp = calloc(sizeof(float), coef->h * coef->w);
+                float *temp = fftwf_alloc_real(coef->h * coef->w);
                 if(!temp) { die("allocation error"); }
 
                 unbox(coef->fdata, temp, w, h);
-                free(coef->fdata);
+                fftwf_free(coef->fdata);
                 coef->fdata = temp;
         }
 
@@ -228,6 +225,6 @@ int main(int argc, char *argv[]) {
         fclose(out);
 
         for(int i = 0; i < 3; i++) {
-                free(jpeg.coefs[i].fdata);
+                fftwf_free(jpeg.coefs[i].fdata);
         }
 }

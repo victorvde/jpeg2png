@@ -10,6 +10,10 @@
 #include <jpeglib.h>
 #include <png.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 static noreturn void die(const char *msg, ...)  {
         if(msg) {
                 fprintf(stderr, "jpeg2png: ");
@@ -65,8 +69,8 @@ static void read_jpeg(FILE *in, struct jpeg *jpeg) {
                 jpeg->coefs[c].h = h;
                 jpeg->coefs[c].data = data;
                 if(!data) { die("could not allocate memory for coefs"); }
-                for(int y = 0; y < i->height_in_blocks; y+=i->v_samp_factor) {
-                        for(int x = 0; x < i->width_in_blocks; x+=i->h_samp_factor) {
+                for(unsigned y = 0; y < i->height_in_blocks; y+=i->v_samp_factor) {
+                        for(unsigned x = 0; x < i->width_in_blocks; x+=i->h_samp_factor) {
                                 JBLOCKARRAY b = d.mem->access_virt_barray((void*)&d, coefs[c], y, i->v_samp_factor, false);
                                 memcpy(data, b[0][x], 64 * sizeof(int16_t));
                                 data += 64;

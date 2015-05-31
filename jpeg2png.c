@@ -80,14 +80,8 @@ static void read_jpeg(FILE *in, struct jpeg *jpeg) {
         jpeg_destroy_decompress(&d);
 }
 
-static int clamp(int x) {
-        if(x < 0) {
-                return 0;
-        } else if(x > 255) {
-                return 255;
-        } else {
-                return x;
-        }
+static float clamp(float x) {
+        return fmax(0., fmin(x, 255.));
 }
 
 static void write_png(FILE *out, int w, int h, float *y, float *cb, float *cr) {

@@ -139,49 +139,65 @@ static float a(int n) {
         }
 }
 
-// get pixel with neumann boundary conditions (i.e. replication on the edges)
-static int p(int x, int y, int w, int h) {
-        x = CLAMP(x, 0, w-1);
-        y = CLAMP(y, 0, h-1);
-        int y_block = y / 8;
-        int y_in = y & 7;
-        int block_width = (w + 7) / 8;
-        int x_block = x / 8;
-        int x_in = x & 7;
-        return (y_block*block_width + x_block) * 64 + y_in * 8 + x_in;
+static inline void check(int x, int y, int w, int h) {
+        assert(0 <= x);
+        assert(x < w);
+        assert(0 <= y);
+        assert(y < h);
+        (void) x;
+        (void) y;
+        (void) w;
+        (void) h;
+}
+
+static inline float *p(float *in, int x, int y, int w, int h) {
+        check(x, y, w, h);
+        return &in[y * w + x];
 }
 
 static void unbox(float *restrict in, float *restrict out, int w, int h) {
         for(int y = 0; y < h; y++) {
                 for(int x = 0; x < w; x++) {
-                        out[y * w + x] = in[p(x, y, w, h)];
+                        int y_block = y / 8;
+                        int y_in = y & 7;
+                        int block_width = (w + 7) / 8;
+                        int x_block = x / 8;
+                        int x_in = x & 7;
+                        float t = in[(y_block*block_width + x_block) * 64 + y_in * 8 + x_in];
+                        *p(out, x, y, w, h) = t;
                 }
         }
 }
 
-static void gradient(const float *restrict in, float *restrict out, int w, int h, bool vertical, bool backward) {
-        for(int y = 0; y < h; y++) {
-                for(int x = 0; x < w; x++) {
-                        if(vertical) {
-                                out[p(x, y, w, h)] = in[p(x, y+1-backward, w, h)] - in[p(x, y-backward, w, h)];
-                        } else {
-                                out[p(x, y, w, h)] = in[p(x+1-backward, y, w, h)] - in[p(x-backward, y, w, h)];
-                        }
-                }
+static inline float gradient_x_forward(float *in, int x, int y, int w, int h) {
+        if(x == w-1) {
+                return 0.;
+        } else {
+                return *p(in, x+1, y, w, h) - *p(in, x, y, w, h);
+        }
+}
+static inline float gradient_x_backward(float *in, int x, int y, int w, int h) {
+        if(x == 0) {
+                return 0.;
+        } else {
+                return *p(in, x, y, w, h) - *p(in, x-1, y, w, h);
         }
 }
 
-static void gradient_x_forward(const float *restrict in, float *restrict out, int w, int h) {
-        gradient(in, out, w, h, false, false);
+static inline float gradient_y_forward(float *in, int x, int y, int w, int h) {
+        if(y == h-1) {
+                return 0.;
+        } else {
+                return *p(in, x, y+1, w, h) - *p(in, x, y, w, h);
+        }
 }
-static void gradient_x_backward(const float *restrict in, float *restrict out, int w, int h) {
-        gradient(in, out, w, h, false, true);
-}
-static void gradient_y_forward(const float *restrict in, float *restrict out, int w, int h) {
-        gradient(in, out, w, h, true, false);
-}
-static void gradient_y_backward(const float *restrict in, float *restrict out, int w, int h) {
-        gradient(in, out, w, h, true, true);
+static inline float gradient_y_backward(float *in, int x, int y, int w, int h) {
+        check(x, y, w, h);
+        if(y == 0) {
+                return 0.;
+        } else {
+                return *p(in, x, y, w, h) - *p(in, x, y-1, w, h);
+        }
 }
 
 #define START_TIMER(n) clock_t macro_timer_##n = start_timer(#n);
@@ -195,6 +211,71 @@ static void stop_timer(clock_t t, const char *n) {
         clock_t diff = clock() - t;
         int msec = diff * 1000 / CLOCKS_PER_SEC;
         printf("%s: %d ms\n", n, msec);
+}
+
+void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
+        coef->fdata = fftwf_alloc_real(coef->h * coef->w);
+        if(!coef->fdata) { die("allocation error"); }
+        int blocks_y = (coef->h + 7) / 8;
+        int blocks_x = (coef->w + 7) / 8;
+        int blocks = blocks_y * blocks_x;
+        for(int i = 0; i < blocks; i++) {
+                element_product(&coef->data[i*64], quant_table, &coef->fdata[i*64]);
+                for(int v = 0; v < 8; v++) {
+                        for(int u = 0; u < 8; u++) {
+                                coef->fdata[i*64 + v*8+u] /= a(u) * a(v);
+                        }
+                }
+        }
+        fftwf_plan p = fftwf_plan_many_r2r(
+                2, (int[]){8, 8}, blocks,
+                coef->fdata, (int[]){8, 8}, 1, 64,
+                coef->fdata, (int[]){8, 8}, 1, 64,
+                (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
+        fftwf_execute(p);
+        fftwf_destroy_plan(p);
+        for(int i = 0; i < blocks; i++) {
+                for(int j = 0; j < 64; j++) {
+                        coef->fdata[i*64 + j] /= 16.;
+                }
+        }
+}
+
+void compute(struct coef *coef) {
+        int w = coef->w;
+        int h = coef->h;
+        float *fdata = coef->fdata;
+
+        float *fdata_x = fftwf_alloc_real(h * w);
+        if(!fdata_x) { die("allocation error"); }
+        float *fdata_y = fftwf_alloc_real(h * w);
+        if(!fdata_y) { die("allocation error"); }
+        float tv = 0;
+        for(int y = 0; y < h; y++) {
+                for(int x = 0; x < w; x++) {
+                        float g_x = gradient_x_forward(fdata, x, y, w, h);
+                        float g_y = gradient_y_forward(fdata, x, y, w, h);
+                        tv += sqrt(g_x * g_x + g_y * g_y);
+                        *p(fdata_x, x, y, w, h) = g_x;
+                        *p(fdata_y, x, y, w, h) = g_y;
+                }
+        }
+        printf("tv = %f, %f\n", tv, tv / (w * h) / sqrt(2.));
+
+        float tv2 = 0;
+        for(int y = 0; y < h; y++) {
+                for(int x = 0; x < w; x++) {
+                        float g_xx = gradient_x_backward(fdata_x, x, y, w, h);
+                        float g_xy = gradient_y_backward(fdata_x, x, y, w, h);
+                        float g_yy = gradient_y_backward(fdata_y, x, y, w, h);
+
+                        tv2 += sqrt(g_xx * g_xx + 2 * g_xy * g_xy + g_yy * g_yy);
+                }
+        }
+        printf("tv2 = %f, %f\n", tv2, tv2 / (w * h) / sqrt(4.));
+
+        fftwf_free(fdata_x);
+        fftwf_free(fdata_y);
 }
 
 int main(int argc, char *argv[]) {
@@ -220,73 +301,9 @@ int main(int argc, char *argv[]) {
                 struct coef *coef = &jpeg.coefs[c];
                 if(coef->h < h) { die("channel %d too short! %d", c, coef->h); }
                 if(coef->w < w) { die("channel %d too thin! %d", c, coef->w); }
-                coef->fdata = fftwf_alloc_real(coef->h * coef->w);
-                if(!coef->fdata) { die("allocation error"); }
-                int blocks_y = (coef->h + 7) / 8;
-                int blocks_x = (coef->w + 7) / 8;
-                int blocks = blocks_y * blocks_x;
-                for(int i = 0; i < blocks; i++) {
-                        element_product(&coef->data[i*64], jpeg.quant_table[c], &coef->fdata[i*64]);
-                        for(int v = 0; v < 8; v++) {
-                                for(int u = 0; u < 8; u++) {
-                                        coef->fdata[i*64 + v*8+u] /= a(u) * a(v);
-                                }
-                        }
-                }
-                fftwf_plan p = fftwf_plan_many_r2r(
-                        2, (int[]){8, 8}, blocks,
-                        coef->fdata, (int[]){8, 8}, 1, 64,
-                        coef->fdata, (int[]){8, 8}, 1, 64,
-                        (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
-                fftwf_execute(p);
-                fftwf_destroy_plan(p);
-                for(int i = 0; i < blocks; i++) {
-                        for(int j = 0; j < 64; j++) {
-                                coef->fdata[i*64 + j] /= 16.;
-                        }
-                }
+                decode_coefficients(coef, jpeg.quant_table[c]);
         }
         STOP_TIMER(decoding_coefficients);
-
-        START_TIMER(computing);
-        for(int i = 0; i < 3; i++) {
-                struct coef *coef = &jpeg.coefs[i];
-                float *fdata_x = fftwf_alloc_real(coef->h * coef->w);
-                if(!fdata_x) { die("allocation error"); }
-                float *fdata_y = fftwf_alloc_real(coef->h * coef->w);
-                if(!fdata_y) { die("allocation error"); }
-                gradient_x_forward(coef->fdata, fdata_x, coef->w, coef->h);
-                gradient_y_forward(coef->fdata, fdata_y, coef->w, coef->h);
-
-                float *fdata_xx = fftwf_alloc_real(coef->h * coef->w);
-                if(!fdata_xx) { die("allocation error"); }
-                float *fdata_xy = fftwf_alloc_real(coef->h * coef->w);
-                if(!fdata_xy) { die("allocation error"); }
-                float *fdata_yy = fftwf_alloc_real(coef->h * coef->w);
-                if(!fdata_yy) { die("allocation error"); }
-                gradient_x_backward(fdata_x, fdata_xx, coef->w, coef->h);
-                gradient_y_backward(fdata_x, fdata_xy, coef->w, coef->h);
-                gradient_y_backward(fdata_y, fdata_yy, coef->w, coef->h);
-
-                float tv = 0;
-                for(int p = 0; p < coef->h * coef->w; p++) {
-                        tv += sqrt(fdata_x[p] * fdata_x[p] + fdata_y[p] * fdata_y[p]);
-                }
-                printf("tv = %f, %f\n", tv, tv / (coef->w * coef->h) / sqrt(2.));
-
-                float tv2 = 0;
-                for(int p = 0; p < coef->h * coef->w; p++) {
-                        tv2 += sqrt(fdata_xx[p] * fdata_xx[p] + 2 * fdata_xy[p] * fdata_xy[p] + fdata_yy[p] * fdata_yy[p]);
-                }
-                printf("tv2 = %f, %f\n", tv2, tv2 / (coef->w * coef->h) / sqrt(4.));
-
-                fftwf_free(fdata_x);
-                fftwf_free(fdata_y);
-                fftwf_free(fdata_xx);
-                fftwf_free(fdata_xy);
-                fftwf_free(fdata_yy);
-        }
-        STOP_TIMER(computing);
 
         START_TIMER(unboxing);
         for(int i = 0; i < 3; i++) {
@@ -299,6 +316,13 @@ int main(int argc, char *argv[]) {
                 coef->fdata = temp;
         }
         STOP_TIMER(unboxing);
+
+        START_TIMER(computing);
+        for(int i = 0; i < 3; i++) {
+                struct coef *coef = &jpeg.coefs[i];
+                compute(coef);
+        }
+        STOP_TIMER(computing);
 
         START_TIMER(adjusting_luma);
         for(int i = 0; i < h * w; i++) {

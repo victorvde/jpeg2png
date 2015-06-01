@@ -6,11 +6,17 @@
 #include <string.h>
 #include <math.h>
 #include <stdarg.h>
+#include <assert.h>
+#include <time.h>
 
 #include <jpeglib.h>
 #include <png.h>
 
 #include <fftw3.h>
+
+#define MIN(a, b)  (((a) < (b)) ? (a) : (b))
+#define MAX(a, b)  (((a) > (b)) ? (a) : (b))
+#define CLAMP(x, low, high) (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 
 static noreturn void die(const char *msg, ...)  {
         if(msg) {
@@ -81,7 +87,7 @@ static void read_jpeg(FILE *in, struct jpeg *jpeg) {
 }
 
 static float clamp(float x) {
-        return fmax(0., fmin(x, 255.));
+        return CLAMP(x, 0., 255.);
 }
 
 static void write_png(FILE *out, int w, int h, float *y, float *cb, float *cr) {
@@ -133,16 +139,62 @@ static float a(int n) {
         }
 }
 
-static void unbox(const float *in, float *out, int w, int h) {
-        for(int y = 0; y < h; y+=8) {
-                for(int x = 0; x < w; x+=8) {
-                        for(int iy = 0; iy < 8; iy++) {
-                                for(int ix = 0; ix < 8; ix++) {
-                                        out[(y+iy)*w+x+ix] = *in++;
-                                }
+// get pixel with neumann boundary conditions (i.e. replication on the edges)
+static int p(int x, int y, int w, int h) {
+        x = CLAMP(x, 0, w-1);
+        y = CLAMP(y, 0, h-1);
+        int y_block = y / 8;
+        int y_in = y & 7;
+        int block_width = (w + 7) / 8;
+        int x_block = x / 8;
+        int x_in = x & 7;
+        return (y_block*block_width + x_block) * 64 + y_in * 8 + x_in;
+}
+
+static void unbox(float *restrict in, float *restrict out, int w, int h) {
+        for(int y = 0; y < h; y++) {
+                for(int x = 0; x < w; x++) {
+                        out[y * w + x] = in[p(x, y, w, h)];
+                }
+        }
+}
+
+static void gradient(const float *restrict in, float *restrict out, int w, int h, bool vertical, bool backward) {
+        for(int y = 0; y < h; y++) {
+                for(int x = 0; x < w; x++) {
+                        if(vertical) {
+                                out[p(x, y, w, h)] = in[p(x, y+1-backward, w, h)] - in[p(x, y-backward, w, h)];
+                        } else {
+                                out[p(x, y, w, h)] = in[p(x+1-backward, y, w, h)] - in[p(x-backward, y, w, h)];
                         }
                 }
         }
+}
+
+static void gradient_x_forward(const float *restrict in, float *restrict out, int w, int h) {
+        gradient(in, out, w, h, false, false);
+}
+static void gradient_x_backward(const float *restrict in, float *restrict out, int w, int h) {
+        gradient(in, out, w, h, false, true);
+}
+static void gradient_y_forward(const float *restrict in, float *restrict out, int w, int h) {
+        gradient(in, out, w, h, true, false);
+}
+static void gradient_y_backward(const float *restrict in, float *restrict out, int w, int h) {
+        gradient(in, out, w, h, true, true);
+}
+
+#define START_TIMER(n) clock_t macro_timer_##n = start_timer(#n);
+static clock_t start_timer(const char *name) {
+        (void) name;
+        return clock();
+}
+
+#define STOP_TIMER(n) stop_timer(macro_timer_##n, #n);
+static void stop_timer(clock_t t, const char *n) {
+        clock_t diff = clock() - t;
+        int msec = diff * 1000 / CLOCKS_PER_SEC;
+        printf("%s: %d ms\n", n, msec);
 }
 
 int main(int argc, char *argv[]) {
@@ -163,7 +215,7 @@ int main(int argc, char *argv[]) {
         int w = jpeg.w;
         int h = jpeg.h;
 
-        puts("decoding coefficients");
+        START_TIMER(decoding_coefficients);
         for(int c = 0; c < 3; c++) {
                 struct coef *coef = &jpeg.coefs[c];
                 if(coef->h < h) { die("channel %d too short! %d", c, coef->h); }
@@ -194,8 +246,49 @@ int main(int argc, char *argv[]) {
                         }
                 }
         }
+        STOP_TIMER(decoding_coefficients);
 
-        puts("unboxing");
+        START_TIMER(computing);
+        for(int i = 0; i < 3; i++) {
+                struct coef *coef = &jpeg.coefs[i];
+                float *fdata_x = fftwf_alloc_real(coef->h * coef->w);
+                if(!fdata_x) { die("allocation error"); }
+                float *fdata_y = fftwf_alloc_real(coef->h * coef->w);
+                if(!fdata_y) { die("allocation error"); }
+                gradient_x_forward(coef->fdata, fdata_x, coef->w, coef->h);
+                gradient_y_forward(coef->fdata, fdata_y, coef->w, coef->h);
+
+                float *fdata_xx = fftwf_alloc_real(coef->h * coef->w);
+                if(!fdata_xx) { die("allocation error"); }
+                float *fdata_xy = fftwf_alloc_real(coef->h * coef->w);
+                if(!fdata_xy) { die("allocation error"); }
+                float *fdata_yy = fftwf_alloc_real(coef->h * coef->w);
+                if(!fdata_yy) { die("allocation error"); }
+                gradient_x_backward(fdata_x, fdata_xx, coef->w, coef->h);
+                gradient_y_backward(fdata_x, fdata_xy, coef->w, coef->h);
+                gradient_y_backward(fdata_y, fdata_yy, coef->w, coef->h);
+
+                float tv = 0;
+                for(int p = 0; p < coef->h * coef->w; p++) {
+                        tv += sqrt(fdata_x[p] * fdata_x[p] + fdata_y[p] * fdata_y[p]);
+                }
+                printf("tv = %f, %f\n", tv, tv / (coef->w * coef->h) / sqrt(2.));
+
+                float tv2 = 0;
+                for(int p = 0; p < coef->h * coef->w; p++) {
+                        tv2 += sqrt(fdata_xx[p] * fdata_xx[p] + 2 * fdata_xy[p] * fdata_xy[p] + fdata_yy[p] * fdata_yy[p]);
+                }
+                printf("tv2 = %f, %f\n", tv2, tv2 / (coef->w * coef->h) / sqrt(4.));
+
+                fftwf_free(fdata_x);
+                fftwf_free(fdata_y);
+                fftwf_free(fdata_xx);
+                fftwf_free(fdata_xy);
+                fftwf_free(fdata_yy);
+        }
+        STOP_TIMER(computing);
+
+        START_TIMER(unboxing);
         for(int i = 0; i < 3; i++) {
                 struct coef *coef = &jpeg.coefs[i];
                 float *temp = fftwf_alloc_real(coef->h * coef->w);
@@ -205,20 +298,24 @@ int main(int argc, char *argv[]) {
                 fftwf_free(coef->fdata);
                 coef->fdata = temp;
         }
+        STOP_TIMER(unboxing);
 
-        puts("adjusting luma");
+        START_TIMER(adjusting_luma);
         for(int i = 0; i < h * w; i++) {
                 jpeg.coefs[0].fdata[i] += 128.;
         }
+        STOP_TIMER(adjusting_luma);
 
-        puts("writing png");
+        START_TIMER(writing_png);
         struct coef yc = jpeg.coefs[0];
         struct coef cbc = jpeg.coefs[1];
         struct coef crc = jpeg.coefs[2];
         write_png(out, w, h, yc.fdata, cbc.fdata, crc.fdata);
         fclose(out);
+        STOP_TIMER(writing_png);
 
         for(int i = 0; i < 3; i++) {
                 fftwf_free(jpeg.coefs[i].fdata);
+                free(jpeg.coefs[i].data);
         }
 }

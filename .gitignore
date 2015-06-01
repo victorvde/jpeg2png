@@ -1,0 +1,8 @@
+*.o
+*.i
+*.s
+
+*.png
+*.jpg
+
+jpeg2png

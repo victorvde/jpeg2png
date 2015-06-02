@@ -255,7 +255,7 @@ void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
         }
 }
 
-void compute_step(struct coef *coef, float step_size) {
+static float compute_step(struct coef *coef, float step_size) {
         int w = coef->w;
         int h = coef->h;
         float *fdata = coef->fdata;
@@ -292,8 +292,7 @@ void compute_step(struct coef *coef, float step_size) {
                         // *p(fdata_y, x, y, w, h) = g_y;
                 }
         }
-        printf("tv = %f, %f\n", tv, tv / (w * h) / sqrt(2.));
-
+        // printf("tv = %f, %f\n", tv, tv / (w * h) / sqrt(2.));
         for(int i = 0; i < h * w; i++) {
                 fdata[i] += step_size * objective_gradient[i];
         }
@@ -313,20 +312,26 @@ void compute_step(struct coef *coef, float step_size) {
         fftwf_free(objective_gradient);
         // fftwf_free(fdata_x);
         // fftwf_free(fdata_y);
+
+        return tv;
 }
 
-static void compute_projection(struct coef *coef, uint16_t quant_table[64]) {
+struct compute_projection_aux {
+        float * restrict q_min;
+        float * restrict q_max;
+        float *temp;
+        fftwf_plan dct;
+        fftwf_plan idct;
+};
+
+static void compute_projection_init(struct coef *coef, uint16_t quant_table[64],struct compute_projection_aux *aux) {
         int w = coef->w;
         int h = coef->h;
-        float *fdata = coef->fdata;
 
         float *q_max = fftwf_alloc_real(h * w);
         if(!q_max) { die("allocation error"); }
         float *q_min = fftwf_alloc_real(h * w);
         if(!q_min) { die("allocation error"); }
-        float *temp = fftwf_alloc_real(h * w);
-        if(!temp) { die("allocation error"); }
-
         int blocks = (h / 8) * (w / 8);
 
         for(int i = 0; i < blocks; i++) {
@@ -336,71 +341,90 @@ static void compute_projection(struct coef *coef, uint16_t quant_table[64]) {
                 }
         }
 
-        box(fdata, temp, w, h);
+        for(int i = 0; i < blocks; i++) {
+                for(int v = 0; v < 8; v++) {
+                        for(int u = 0; u < 8; u++) {
+                                q_max[i*64 + v*8+u] /= a(u) * a(v);
+                                q_min[i*64 + v*8+u] /= a(u) * a(v);
+                        }
+                }
+        }
+
+        aux->q_min = q_min;
+        aux->q_max = q_max;
+
+        float *temp = fftwf_alloc_real(h * w);
+        if(!temp) { die("allocation error"); }
+
+        aux->temp = temp;
 
         fftwf_plan dct = fftwf_plan_many_r2r(
                 2, (int[]){8, 8}, blocks,
                 temp, (int[]){8, 8}, 1, 64,
                 temp, (int[]){8, 8}, 1, 64,
                 (void*)(int[]){FFTW_REDFT10, FFTW_REDFT10}, FFTW_ESTIMATE);
-        fftwf_execute(dct);
-        fftwf_destroy_plan(dct);
-        for(int i = 0; i < h * w; i++) {
-                temp[i] /= 16.;
-        }
-        for(int i = 0; i < blocks; i++) {
-                element_product(&coef->data[i*64], quant_table, &coef->fdata[i*64]);
-                for(int v = 0; v < 8; v++) {
-                        for(int u = 0; u < 8; u++) {
-                                temp[i*64 + v*8+u] *= a(u) * a(v);
-                        }
-                }
-        }
 
-        for(int i = 0; i < h * w; i++) {
-                // printf("%d %f %f %f\n", coef->data[i] * quant_table[i % 64], temp[i], q_min[i], q_max[i]);
-                temp[i] = CLAMP(temp[i], q_min[i], q_max[i]);
-        }
+        aux->dct = dct;
 
-        for(int i = 0; i < blocks; i++) {
-                element_product(&coef->data[i*64], quant_table, &coef->fdata[i*64]);
-                for(int v = 0; v < 8; v++) {
-                        for(int u = 0; u < 8; u++) {
-                                temp[i*64 + v*8+u] /= a(u) * a(v);
-                        }
-                }
-        }
         fftwf_plan idct = fftwf_plan_many_r2r(
                 2, (int[]){8, 8}, blocks,
                 temp, (int[]){8, 8}, 1, 64,
                 temp, (int[]){8, 8}, 1, 64,
                 (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
-        fftwf_execute(idct);
+
+        aux->idct = idct;
+}
+
+static void compute_projection_destroy(struct compute_projection_aux *aux) {
+        fftwf_destroy_plan(aux->idct);
+        fftwf_destroy_plan(aux->dct);
+        fftwf_free(aux->temp);
+        fftwf_free(aux->q_min);
+        fftwf_free(aux->q_max);
+}
+
+static void compute_projection(struct coef *coef, struct compute_projection_aux *aux) {
+        int w = coef->w;
+        int h = coef->h;
+        float *fdata = coef->fdata;
+
+        float *temp = aux->temp;
+
+        int blocks = (h / 8) * (w / 8);
+
+        box(fdata, temp, w, h);
+
+        fftwf_execute(aux->dct);
+        for(int i = 0; i < h * w; i++) {
+                temp[i] /= 16.;
+        }
+
+        for(int i = 0; i < h * w; i++) {
+                temp[i] = CLAMP(temp[i], aux->q_min[i], aux->q_max[i]);
+        }
+
+        fftwf_execute(aux->idct);
         for(int i = 0; i < blocks * 64; i++) {
                 temp[i] /= 16.;
         }
-        fftwf_destroy_plan(idct);
 
         unbox(temp, fdata, w, h);
-
-        fftwf_free(q_min);
-        fftwf_free(q_max);
-        fftwf_free(temp);
 }
 
 static void compute(struct coef *coef, uint16_t quant_table[64]) {
-        START_TIMER(compute_all_steps);
-        const int N = 250;
-        for(int i = 0; i < 250; i++) {
-                START_TIMER(compute_proj);
-                compute_projection(coef, quant_table);
-                STOP_TIMER(compute_proj);
+        struct compute_projection_aux cpa;
+        compute_projection_init(coef, quant_table, &cpa);
 
-                START_TIMER(compute_step);
-                compute_step(coef, 1. / sqrt(1 + N));
-                STOP_TIMER(compute_step);
+        const int N = 100;
+        float tv;
+        for(int i = 0; i < N; i++) {
+                compute_projection(coef, &cpa);
+                tv = compute_step(coef, 1. / sqrt(1 + N));
         }
-        STOP_TIMER(compute_all_steps);
+
+        printf("TV = %f, %f\n", tv, tv / (coef->w * coef->h) / sqrt(2.));
+
+        compute_projection_destroy(&cpa);
 }
 
 int main(int argc, char *argv[]) {
@@ -442,9 +466,11 @@ int main(int argc, char *argv[]) {
 
         START_TIMER(computing);
         for(int i = 0; i < 3; i++) {
+                START_TIMER(compute_1);
                 struct coef *coef = &jpeg.coefs[i];
                 uint16_t *quant_table = jpeg.quant_table[i];
                 compute(coef, quant_table);
+                STOP_TIMER(compute_1);
         }
         STOP_TIMER(computing);
 

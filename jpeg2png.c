@@ -274,7 +274,7 @@ static float compute_step(struct coef *coef, float step_size) {
                 for(int x = 0; x < w; x++) {
                         float g_x = gradient_x_forward(fdata, x, y, w, h);
                         float g_y = gradient_y_forward(fdata, x, y, w, h);
-                        float g_norm = hypotf(g_x, g_y);
+                        float g_norm = sqrt(g_x * g_x + g_y * g_y);
                         tv += g_norm;
                         if(g_norm != 0) {
                                 if(g_x != 0.) {

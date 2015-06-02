@@ -115,11 +115,13 @@ static void write_png(FILE *out, int w, int h, float *y, float *cb, float *cr) {
                 }
         }
 
-        png_byte *rows[h];
+        png_byte **rows = malloc(sizeof(*rows) * h);
+        if(!rows) { die("allocation failure"); }
         for(int i = 0; i < h; i++) {
                 rows[i] = &image_data[i * w * 3];
         }
         png_write_image(png_ptr, rows);
+        free(rows);
         png_write_end(png_ptr, info_ptr);
         free(image_data);
         png_destroy_write_struct(&png_ptr, &info_ptr);
@@ -174,10 +176,10 @@ static void unbox(float *restrict in, float *restrict out, int w, int h) {
 static void box(float *restrict in, float *restrict out, int w, int h) {
         assert((w & 7) == 0);
         assert((h & 7) == 0);
-        for(int block_x = 0; block_x < w / 8; block_x++) {
-                for(int block_y = 0; block_y < w / 8; block_y++) {
-                        for(int in_x = 0; in_x < 8; in_x++) {
-                                for(int in_y = 0; in_y < 8; in_y++) {
+        for(int block_y = 0; block_y < h / 8; block_y++) {
+                for(int block_x = 0; block_x < w / 8; block_x++) {
+                        for(int in_y = 0; in_y < 8; in_y++) {
+                                for(int in_x = 0; in_x < 8; in_x++) {
                                         *out++ = *p(in, block_x * 8 + in_x, block_y * 8 + in_y, w, h);
                                 }
                         }
@@ -343,14 +345,11 @@ int main(int argc, char *argv[]) {
         read_jpeg(in, &jpeg);
         fclose(in);
 
-        int w = jpeg.w;
-        int h = jpeg.h;
-
         START_TIMER(decoding_coefficients);
         for(int c = 0; c < 3; c++) {
                 struct coef *coef = &jpeg.coefs[c];
-                if(coef->h < h) { die("channel %d too short! %d", c, coef->h); }
-                if(coef->w < w) { die("channel %d too thin! %d", c, coef->w); }
+                if(coef->h < jpeg.h) { die("channel %d too short! %d", c, coef->h); }
+                if(coef->w < jpeg.w) { die("channel %d too thin! %d", c, coef->w); }
                 decode_coefficients(coef, jpeg.quant_table[c]);
         }
         STOP_TIMER(decoding_coefficients);
@@ -367,8 +366,16 @@ int main(int argc, char *argv[]) {
                 float *temp = fftwf_alloc_real(coef->h * coef->w);
                 if(!temp) { die("allocation error"); }
 
-                unbox(coef->fdata, temp, w, h);
+                unbox(coef->fdata, temp, coef->w, coef->h);
+
+                float *temp2 = fftwf_alloc_real(coef->h * coef->w);
+                if(!temp2) { die("allocation error"); }
+
+                box(temp, temp2, coef->w, coef->h);
+                printf("diff %d\n", memcmp(coef->fdata, temp2, coef->w * coef->h * sizeof(float)));
+
                 fftwf_free(coef->fdata);
+                fftwf_free(temp2);
                 coef->fdata = temp;
         }
         STOP_TIMER(unboxing);
@@ -381,16 +388,19 @@ int main(int argc, char *argv[]) {
         STOP_TIMER(computing);
 
         START_TIMER(adjusting_luma);
-        for(int i = 0; i < h * w; i++) {
-                jpeg.coefs[0].fdata[i] += 128.;
+        struct coef *coef = &jpeg.coefs[0];
+        for(int i = 0; i < coef->h * coef->w; i++) {
+                coef->fdata[i] += 128.;
         }
         STOP_TIMER(adjusting_luma);
 
         START_TIMER(writing_png);
         struct coef yc = jpeg.coefs[0];
+        printf("luma: %d x %d\n", yc.w, yc.h);
+        printf("jpeg: %d x %d\n", jpeg.w, jpeg.h);
         struct coef cbc = jpeg.coefs[1];
         struct coef crc = jpeg.coefs[2];
-        write_png(out, w, h, yc.fdata, cbc.fdata, crc.fdata);
+        write_png(out, jpeg.w, jpeg.h, yc.fdata, cbc.fdata, crc.fdata);
         fclose(out);
         STOP_TIMER(writing_png);
 

@@ -255,79 +255,152 @@ void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
         }
 }
 
-void compute(struct coef *coef) {
+void compute_step(struct coef *coef, float step_size) {
         int w = coef->w;
         int h = coef->h;
         float *fdata = coef->fdata;
 
-        float *fdata_x = fftwf_alloc_real(h * w);
-        if(!fdata_x) { die("allocation error"); }
-        float *fdata_y = fftwf_alloc_real(h * w);
-        if(!fdata_y) { die("allocation error"); }
+        // float *fdata_x = fftwf_alloc_real(h * w);
+        // if(!fdata_x) { die("allocation error"); }
+        // float *fdata_y = fftwf_alloc_real(h * w);
+        // if(!fdata_y) { die("allocation error"); }
+
+        float *objective_gradient = fftwf_alloc_real(h * w);
+        if(!objective_gradient) { die("allocation error"); }
+        for(int i = 0; i < h * w; i++) {
+                objective_gradient[i] = 0.;
+        }
+
         float tv = 0;
         for(int y = 0; y < h; y++) {
                 for(int x = 0; x < w; x++) {
                         float g_x = gradient_x_forward(fdata, x, y, w, h);
                         float g_y = gradient_y_forward(fdata, x, y, w, h);
-                        tv += sqrt(g_x * g_x + g_y * g_y);
-                        *p(fdata_x, x, y, w, h) = g_x;
-                        *p(fdata_y, x, y, w, h) = g_y;
+                        float g_norm = hypotf(g_x, g_y);
+                        tv += g_norm;
+                        if(g_norm != 0) {
+                                if(g_x != 0.) {
+                                        *p(objective_gradient, x, y, w, h) += g_x / g_norm;
+                                        *p(objective_gradient, x+1, y, w, h) -= g_x / g_norm;
+                                }
+                                if(g_y != 0.) {
+                                        *p(objective_gradient, x, y, w, h) += g_y / g_norm;
+                                        *p(objective_gradient, x, y+1, w, h) -= g_y / g_norm;
+                                }
+                        }
+                        // *p(fdata_x, x, y, w, h) = g_x;
+                        // *p(fdata_y, x, y, w, h) = g_y;
                 }
         }
         printf("tv = %f, %f\n", tv, tv / (w * h) / sqrt(2.));
 
-        float tv2 = 0;
-        for(int y = 0; y < h; y++) {
-                for(int x = 0; x < w; x++) {
-                        float g_xx = gradient_x_backward(fdata_x, x, y, w, h);
-                        float g_xy = gradient_y_backward(fdata_x, x, y, w, h);
-                        float g_yy = gradient_y_backward(fdata_y, x, y, w, h);
-
-                        tv2 += sqrt(g_xx * g_xx + 2 * g_xy * g_xy + g_yy * g_yy);
-                }
+        for(int i = 0; i < h * w; i++) {
+                fdata[i] += step_size * objective_gradient[i];
         }
-        printf("tv2 = %f, %f\n", tv2, tv2 / (w * h) / sqrt(4.));
 
-        fftwf_free(fdata_x);
-        fftwf_free(fdata_y);
+        // float tv2 = 0;
+        // for(int y = 0; y < h; y++) {
+        //         for(int x = 0; x < w; x++) {
+        //                 float g_xx = gradient_x_backward(fdata_x, x, y, w, h);
+        //                 float g_xy = gradient_y_backward(fdata_x, x, y, w, h);
+        //                 float g_yy = gradient_y_backward(fdata_y, x, y, w, h);
+
+        //                 tv2 += sqrt(g_xx * g_xx + 2 * g_xy * g_xy + g_yy * g_yy);
+        //         }
+        // }
+        // printf("tv2 = %f, %f\n", tv2, tv2 / (w * h) / sqrt(4.));
+
+        fftwf_free(objective_gradient);
+        // fftwf_free(fdata_x);
+        // fftwf_free(fdata_y);
 }
 
-static void test_dct(struct coef *coef) {
+static void compute_projection(struct coef *coef, uint16_t quant_table[64]) {
         int w = coef->w;
         int h = coef->h;
         float *fdata = coef->fdata;
 
+        float *q_max = fftwf_alloc_real(h * w);
+        if(!q_max) { die("allocation error"); }
+        float *q_min = fftwf_alloc_real(h * w);
+        if(!q_min) { die("allocation error"); }
         float *temp = fftwf_alloc_real(h * w);
         if(!temp) { die("allocation error"); }
 
-        memcpy(temp, fdata, h * w * sizeof(float));
-
         int blocks = (h / 8) * (w / 8);
 
-        fftwf_plan idct = fftwf_plan_many_r2r(
-                2, (int[]){8, 8}, blocks,
-                temp, (int[]){8, 8}, 1, 64,
-                temp, (int[]){8, 8}, 1, 64,
-                (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
+        for(int i = 0; i < blocks; i++) {
+                for(int j = 0; j < 64; j++) {
+                       q_max[i*64+j] = (coef->data[i*64+j] + 0.5) * quant_table[j];
+                       q_min[i*64+j] = (coef->data[i*64+j] - 0.5) * quant_table[j];
+                }
+        }
+
+        box(fdata, temp, w, h);
+
         fftwf_plan dct = fftwf_plan_many_r2r(
                 2, (int[]){8, 8}, blocks,
                 temp, (int[]){8, 8}, 1, 64,
                 temp, (int[]){8, 8}, 1, 64,
                 (void*)(int[]){FFTW_REDFT10, FFTW_REDFT10}, FFTW_ESTIMATE);
-
         fftwf_execute(dct);
-        for(int i = 0; i < blocks * 64; i++) {
+        fftwf_destroy_plan(dct);
+        for(int i = 0; i < h * w; i++) {
                 temp[i] /= 16.;
         }
+        for(int i = 0; i < blocks; i++) {
+                element_product(&coef->data[i*64], quant_table, &coef->fdata[i*64]);
+                for(int v = 0; v < 8; v++) {
+                        for(int u = 0; u < 8; u++) {
+                                temp[i*64 + v*8+u] *= a(u) * a(v);
+                        }
+                }
+        }
+
+        for(int i = 0; i < h * w; i++) {
+                // printf("%d %f %f %f\n", coef->data[i] * quant_table[i % 64], temp[i], q_min[i], q_max[i]);
+                temp[i] = CLAMP(temp[i], q_min[i], q_max[i]);
+        }
+
+        for(int i = 0; i < blocks; i++) {
+                element_product(&coef->data[i*64], quant_table, &coef->fdata[i*64]);
+                for(int v = 0; v < 8; v++) {
+                        for(int u = 0; u < 8; u++) {
+                                temp[i*64 + v*8+u] /= a(u) * a(v);
+                        }
+                }
+        }
+        fftwf_plan idct = fftwf_plan_many_r2r(
+                2, (int[]){8, 8}, blocks,
+                temp, (int[]){8, 8}, 1, 64,
+                temp, (int[]){8, 8}, 1, 64,
+                (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
         fftwf_execute(idct);
         for(int i = 0; i < blocks * 64; i++) {
                 temp[i] /= 16.;
         }
-        printf("%f %f\n", fdata[0], temp[0]);
-
         fftwf_destroy_plan(idct);
-        fftwf_destroy_plan(dct);
+
+        unbox(temp, fdata, w, h);
+
+        fftwf_free(q_min);
+        fftwf_free(q_max);
         fftwf_free(temp);
+}
+
+static void compute(struct coef *coef, uint16_t quant_table[64]) {
+        START_TIMER(compute_all_steps);
+        const int N = 250;
+        for(int i = 0; i < 250; i++) {
+                START_TIMER(compute_proj);
+                compute_projection(coef, quant_table);
+                STOP_TIMER(compute_proj);
+
+                START_TIMER(compute_step);
+                compute_step(coef, 1. / sqrt(1 + N));
+                STOP_TIMER(compute_step);
+        }
+        STOP_TIMER(compute_all_steps);
 }
 
 int main(int argc, char *argv[]) {
@@ -354,12 +427,6 @@ int main(int argc, char *argv[]) {
         }
         STOP_TIMER(decoding_coefficients);
 
-        START_TIMER(dct_test);
-        for(int i = 0; i < 3; i++) {
-                test_dct(&jpeg.coefs[i]);
-        }
-        STOP_TIMER(dct_test);
-
         START_TIMER(unboxing);
         for(int i = 0; i < 3; i++) {
                 struct coef *coef = &jpeg.coefs[i];
@@ -368,14 +435,7 @@ int main(int argc, char *argv[]) {
 
                 unbox(coef->fdata, temp, coef->w, coef->h);
 
-                float *temp2 = fftwf_alloc_real(coef->h * coef->w);
-                if(!temp2) { die("allocation error"); }
-
-                box(temp, temp2, coef->w, coef->h);
-                printf("diff %d\n", memcmp(coef->fdata, temp2, coef->w * coef->h * sizeof(float)));
-
                 fftwf_free(coef->fdata);
-                fftwf_free(temp2);
                 coef->fdata = temp;
         }
         STOP_TIMER(unboxing);
@@ -383,7 +443,8 @@ int main(int argc, char *argv[]) {
         START_TIMER(computing);
         for(int i = 0; i < 3; i++) {
                 struct coef *coef = &jpeg.coefs[i];
-                compute(coef);
+                uint16_t *quant_table = jpeg.quant_table[i];
+                compute(coef, quant_table);
         }
         STOP_TIMER(computing);
 

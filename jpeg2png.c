@@ -160,15 +160,13 @@ static inline float *p(float *in, int x, int y, int w, int h) {
 static void unbox(float *restrict in, float *restrict out, int w, int h) {
         assert((w & 7) == 0);
         assert((h & 7) == 0);
-        for(int y = 0; y < h; y++) {
-                for(int x = 0; x < w; x++) {
-                        int y_block = y / 8;
-                        int y_in = y & 7;
-                        int block_width = w / 8;
-                        int x_block = x / 8;
-                        int x_in = x & 7;
-                        float t = in[(y_block*block_width + x_block) * 64 + y_in * 8 + x_in];
-                        *p(out, x, y, w, h) = t;
+        for(int block_y = 0; block_y < h / 8; block_y++) {
+                for(int block_x = 0; block_x < w / 8; block_x++) {
+                        for(int in_y = 0; in_y < 8; in_y++) {
+                                for(int in_x = 0; in_x < 8; in_x++) {
+                                        *p(out, block_x * 8 + in_x, block_y * 8 + in_y, w, h) = *in++;
+                                }
+                        }
                 }
         }
 }

@@ -156,15 +156,31 @@ static inline float *p(float *in, int x, int y, int w, int h) {
 }
 
 static void unbox(float *restrict in, float *restrict out, int w, int h) {
+        assert((w & 7) == 0);
+        assert((h & 7) == 0);
         for(int y = 0; y < h; y++) {
                 for(int x = 0; x < w; x++) {
                         int y_block = y / 8;
                         int y_in = y & 7;
-                        int block_width = (w + 7) / 8;
+                        int block_width = w / 8;
                         int x_block = x / 8;
                         int x_in = x & 7;
                         float t = in[(y_block*block_width + x_block) * 64 + y_in * 8 + x_in];
                         *p(out, x, y, w, h) = t;
+                }
+        }
+}
+
+static void box(float *restrict in, float *restrict out, int w, int h) {
+        assert((w & 7) == 0);
+        assert((h & 7) == 0);
+        for(int block_x = 0; block_x < w / 8; block_x++) {
+                for(int block_y = 0; block_y < w / 8; block_y++) {
+                        for(int in_x = 0; in_x < 8; in_x++) {
+                                for(int in_y = 0; in_y < 8; in_y++) {
+                                        *out++ = *p(in, block_x * 8 + in_x, block_y * 8 + in_y, w, h);
+                                }
+                        }
                 }
         }
 }
@@ -216,9 +232,7 @@ static void stop_timer(clock_t t, const char *n) {
 void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
         coef->fdata = fftwf_alloc_real(coef->h * coef->w);
         if(!coef->fdata) { die("allocation error"); }
-        int blocks_y = (coef->h + 7) / 8;
-        int blocks_x = (coef->w + 7) / 8;
-        int blocks = blocks_y * blocks_x;
+        int blocks = (coef->h / 8) * (coef->w / 8);
         for(int i = 0; i < blocks; i++) {
                 element_product(&coef->data[i*64], quant_table, &coef->fdata[i*64]);
                 for(int v = 0; v < 8; v++) {
@@ -234,10 +248,8 @@ void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
                 (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
         fftwf_execute(p);
         fftwf_destroy_plan(p);
-        for(int i = 0; i < blocks; i++) {
-                for(int j = 0; j < 64; j++) {
-                        coef->fdata[i*64 + j] /= 16.;
-                }
+        for(int i = 0; i < blocks * 64; i++) {
+                coef->fdata[i] /= 16.;
         }
 }
 
@@ -278,6 +290,44 @@ void compute(struct coef *coef) {
         fftwf_free(fdata_y);
 }
 
+static void test_dct(struct coef *coef) {
+        int w = coef->w;
+        int h = coef->h;
+        float *fdata = coef->fdata;
+
+        float *temp = fftwf_alloc_real(h * w);
+        if(!temp) { die("allocation error"); }
+
+        memcpy(temp, fdata, h * w * sizeof(float));
+
+        int blocks = (h / 8) * (w / 8);
+
+        fftwf_plan idct = fftwf_plan_many_r2r(
+                2, (int[]){8, 8}, blocks,
+                temp, (int[]){8, 8}, 1, 64,
+                temp, (int[]){8, 8}, 1, 64,
+                (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
+        fftwf_plan dct = fftwf_plan_many_r2r(
+                2, (int[]){8, 8}, blocks,
+                temp, (int[]){8, 8}, 1, 64,
+                temp, (int[]){8, 8}, 1, 64,
+                (void*)(int[]){FFTW_REDFT10, FFTW_REDFT10}, FFTW_ESTIMATE);
+
+        fftwf_execute(dct);
+        for(int i = 0; i < blocks * 64; i++) {
+                temp[i] /= 16.;
+        }
+        fftwf_execute(idct);
+        for(int i = 0; i < blocks * 64; i++) {
+                temp[i] /= 16.;
+        }
+        printf("%f %f\n", fdata[0], temp[0]);
+
+        fftwf_destroy_plan(idct);
+        fftwf_destroy_plan(dct);
+        fftwf_free(temp);
+}
+
 int main(int argc, char *argv[]) {
         if(argc != 3) {
                 die("usage: jpeg2png in.jpg out.png");
@@ -304,6 +354,12 @@ int main(int argc, char *argv[]) {
                 decode_coefficients(coef, jpeg.quant_table[c]);
         }
         STOP_TIMER(decoding_coefficients);
+
+        START_TIMER(dct_test);
+        for(int i = 0; i < 3; i++) {
+                test_dct(&jpeg.coefs[i]);
+        }
+        STOP_TIMER(dct_test);
 
         START_TIMER(unboxing);
         for(int i = 0; i < 3; i++) {

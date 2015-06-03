@@ -1,135 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdnoreturn.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
-#include <stdarg.h>
 #include <assert.h>
-#include <time.h>
-
-#include <jpeglib.h>
-#include <png.h>
 
 #include <fftw3.h>
 
-#define MIN(a, b)  (((a) < (b)) ? (a) : (b))
-#define MAX(a, b)  (((a) > (b)) ? (a) : (b))
-#define CLAMP(x, low, high) (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
-#define DUMP(v, f) do { printf( #v " = " f "\n", v); } while(false)
-
-static noreturn void die(const char *msg, ...)  {
-        if(msg) {
-                fprintf(stderr, "jpeg2png: ");
-                va_list l;
-                va_start(l, msg);
-                vfprintf(stderr, msg, l);
-                va_end(l);
-                fprintf(stderr, "\n");
-        } else {
-                perror("jpeg2png");
-        }
-        exit(EXIT_FAILURE);
-}
-
-struct coef {
-        int h;
-        int w;
-        int16_t *data;
-        float *fdata;
-};
-
-struct jpeg {
-        int h;
-        int w;
-        uint16_t quant_table[3][64];
-        struct coef coefs[3];
-};
-
-static void read_jpeg(FILE *in, struct jpeg *jpeg) {
-        struct jpeg_decompress_struct d;
-        struct jpeg_error_mgr jerr;
-        d.err = jpeg_std_error(&jerr);
-        jpeg_create_decompress(&d);
-        jpeg_stdio_src(&d, in);
-        jpeg_read_header(&d, true);
-
-        jpeg->h = d.image_height;
-        jpeg->w = d.image_width;
-
-        if(d.num_components != 3) { die("only 3 component jpegs are supported"); }
-
-        for(int c = 0; c < d.num_components; c++) {
-                int i = d.comp_info[c].quant_tbl_no;
-                JQUANT_TBL *t = d.quant_tbl_ptrs[i];
-                memcpy(jpeg->quant_table[c], t->quantval, sizeof(uint16_t) * 64);
-        }
-
-        jvirt_barray_ptr *coefs = jpeg_read_coefficients(&d);
-        for(int c = 0; c < d.num_components; c++) {
-                jpeg_component_info *i = &d.comp_info[c];
-                int h = i->height_in_blocks * 8;
-                int w = i->width_in_blocks * 8;
-                int16_t *data = malloc(w * h * sizeof(int16_t));
-                jpeg->coefs[c].w = w;
-                jpeg->coefs[c].h = h;
-                jpeg->coefs[c].data = data;
-                if(!data) { die("could not allocate memory for coefs"); }
-                for(int y = 0; y < h / 8; y++) {
-                        JBLOCKARRAY b = d.mem->access_virt_barray((void*)&d, coefs[c], y, 1, false);
-                        for(int x = 0; x < w / 8; x++) {
-                                memcpy(data, b[0][x], 64 * sizeof(int16_t));
-                                data += 64;
-                        }
-                }
-        }
-        jpeg_destroy_decompress(&d);
-}
-
-static float clamp(float x) {
-        return CLAMP(x, 0., 255.);
-}
-
-static void write_png(FILE *out, int w, int h, struct coef *y, struct coef *cb, struct coef *cr) {
-        png_struct *png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-        if(!png_ptr) { die("could not initialize PNG write struct"); }
-        png_info *info_ptr = png_create_info_struct(png_ptr);
-        if (!info_ptr) { die("could not initialize PNG info struct"); }
-        if (setjmp(png_jmpbuf(png_ptr)))
-        {
-                /* If we get here, we had a problem writing the file */
-                die("problem while writing PNG file");
-        }
-        png_init_io(png_ptr, out);
-        png_set_IHDR(png_ptr, info_ptr, w, h, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
-        png_write_info(png_ptr, info_ptr);
-        png_byte *image_data = calloc(sizeof(png_byte), h * w * 3);
-        if(!image_data) { die("could not allocate image data");}
-
-        for(int i = 0; i < h; i++) {
-                for(int j = 0; j < w; j++) {
-                        int yi = y->fdata[i * y->w + j];
-                        int cbi = cb->fdata[i * cb->w + j];
-                        int cri = cr->fdata[i * cr->w + j];
-
-                        image_data[(i*w+j)*3] = clamp(yi + 1.402 * cri);
-                        image_data[(i*w+j)*3+1] = clamp(yi - 0.34414 * cbi - 0.71414 * cri);
-                        image_data[(i*w+j)*3+2] = clamp(yi + 1.772 * cbi);
-                }
-        }
-
-        png_byte **rows = malloc(sizeof(*rows) * h);
-        if(!rows) { die("allocation failure"); }
-        for(int i = 0; i < h; i++) {
-                rows[i] = &image_data[i * w * 3];
-        }
-        png_write_image(png_ptr, rows);
-        free(rows);
-        png_write_end(png_ptr, info_ptr);
-        free(image_data);
-        png_destroy_write_struct(&png_ptr, &info_ptr);
-}
+#include "jpeg2png.h"
+#include "utils.h"
+#include "jpeg.h"
+#include "png.h"
 
 static void element_product(const int16_t data[64], const uint16_t quant_table[64], float *out) {
         for(int i = 0; i < 64; i++) {
@@ -187,19 +68,6 @@ static void box(float *restrict in, float *restrict out, int w, int h) {
                         }
                 }
         }
-}
-
-#define START_TIMER(n) clock_t macro_timer_##n = start_timer(#n);
-static clock_t start_timer(const char *name) {
-        (void) name;
-        return clock();
-}
-
-#define STOP_TIMER(n) stop_timer(macro_timer_##n, #n);
-static void stop_timer(clock_t t, const char *n) {
-        clock_t diff = clock() - t;
-        int msec = diff * 1000 / CLOCKS_PER_SEC;
-        printf("%s: %d ms\n", n, msec);
 }
 
 void decode_coefficients(struct coef *coef, uint16_t *quant_table) {

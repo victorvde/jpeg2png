@@ -282,30 +282,35 @@ static float compute_step(struct coef *coef, float weight, float step_size) {
                         for(int x = 0; x < w; x++) {
                                 // backward x
                                 float g_xx = x <= 0 ? 0. : *p(fdata_x, x, y, w, h) - *p(fdata_x, x-1, y, w, h);
-                                // forward y
-                                float g_xy = y >= h-1 ? 0. : *p(fdata_x, x, y+1, w, h) - *p(fdata_x, x, y, w, h);
+                                // backward x
+                                float g_yx = x <= 0 ? 0. : *p(fdata_y, x, y, w, h) - *p(fdata_y, x-1, y, w, h);
+                                // backward y
+                                float g_xy = y <= 0 ? 0. : *p(fdata_x, x, y, w, h) - *p(fdata_x, x, y-1, w, h);
                                 // backward y
                                 float g_yy = y <= 0 ? 0. : *p(fdata_y, x, y, w, h) - *p(fdata_y, x, y-1, w, h);
                                 // norm
-                                float g2_norm = sqrt(g_xx * g_xx + 2 * g_xy * g_xy + g_yy * g_yy);
+                                float g2_norm = sqrt(g_xx * g_xx + g_yx * g_yx + g_xy * g_xy + g_yy * g_yy);
                                 tv2 += g2_norm;
                                 // compute derivatives
                                 if(g2_norm != 0.) {
-                                        *p(objective_gradient, x, y, w, h) += alpha * (-(2. * g_xx + 2. * g_xy +2. *  g_yy) / g2_norm);
+                                        *p(objective_gradient, x, y, w, h) += alpha * (-(2. * g_xx + g_xy + g_yx + 2. *  g_yy) / g2_norm);
                                         if(x > 0) {
-                                                *p(objective_gradient, x-1, y, w, h) += alpha * (g_xx / g2_norm);
+                                                *p(objective_gradient, x-1, y, w, h) += alpha * ((g_yx + g_xx) / g2_norm);
                                         }
                                         if(x < w-1) {
-                                                *p(objective_gradient, x+1, y, w, h) += alpha * ((g_xx + 2. * g_xy) / g2_norm);
+                                                *p(objective_gradient, x+1, y, w, h) += alpha * ((g_xx + g_xy) / g2_norm);
                                         }
                                         if(y > 0) {
-                                                *p(objective_gradient, x, y-1, w, h) += alpha * (g_yy / g2_norm);
+                                                *p(objective_gradient, x, y-1, w, h) += alpha * ((g_yy + g_xy) / g2_norm);
                                         }
                                         if(y < h-1) {
-                                                *p(objective_gradient, x, y+1, w, h) += alpha * ((g_yy + 2. * g_xy) / g2_norm);
+                                                *p(objective_gradient, x, y+1, w, h) += alpha * ((g_yy + g_yx) / g2_norm);
                                         }
-                                        if(x < w-1 && y < h-1) {
-                                                *p(objective_gradient, x+1, y+1, w, h) += alpha * (-(2. * g_xy) / g2_norm);
+                                        if(x < w-1 && y > 0) {
+                                                *p(objective_gradient, x+1, y-1, w, h) += alpha * ((-g_xy) / g2_norm);
+                                        }
+                                        if(x > 0 && y < h-1) {
+                                                *p(objective_gradient, x-1, y+1, w, h) += alpha * ((-g_yx) / g2_norm);
                                         }
                                 }
                         }

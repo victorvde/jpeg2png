@@ -1,11 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
-#include <math.h>
-#include <assert.h>
+#include <stdnoreturn.h>
 
 #include <fftw3.h>
+
+#include "gopt/gopt.h"
 
 #include "jpeg2png.h"
 #include "utils.h"
@@ -15,17 +14,56 @@
 #include "upsample.h"
 #include "compute.h"
 
-int main(int argc, char *argv[]) {
-        if(argc != 3) {
-                die("usage: jpeg2png in.jpg out.png");
+static const float default_weight = 0.3;
+static const int default_iterations = 100;
+
+noreturn static void usage() {
+        printf(
+                "usage: jpeg2png in.jpg out.png [-w weight] [-i iterations]\n"
+                "\n"
+                "-w weight\n"
+                "--second-order-weight weight\n"
+                "\tweight is a floating point number between 0.0 and 1.0 for TVG weight alpha_1\n"
+                "\thigher values give smoother transitions with less staircasing\n"
+                "\ta value of 1.0 means equivalent weight to the first order weight\n"
+                "\ta value of 0.0 means plain Total Variation, and gives a speed boost\n"
+                "\tdefault value: %g\n"
+                "\n"
+                "-i iterations\n"
+                "--iterations iterations\n"
+                "\titerations is an integer for the number of optimization steps\n"
+                "\thigher values give better results but take more time\n"
+                "\tdefault value: %d\n"
+                , default_weight, default_iterations);
+        exit(EXIT_FAILURE);
+}
+
+int main(int argc, const char **argv) {
+        void *options = gopt_sort(&argc, argv, gopt_start(
+                gopt_option('h', GOPT_NOARG, gopt_shorts( 'h', '?' ), gopt_longs("help")),
+                gopt_option('i', GOPT_ARG, gopt_shorts('i'), gopt_longs("iterations")),
+                gopt_option('w', GOPT_ARG, gopt_shorts('w'), gopt_longs("second-order-weight"))));
+        if(argc != 3 || gopt(options, 'h')) {
+                usage();
+        }
+        const char *arg_string;
+        float weight = default_weight;
+        if(gopt_arg(options, 'w', &arg_string)) {
+                if(sscanf(arg_string, "%f", &weight) != 1) {
+                        die("invalid weight");
+                }
+        }
+        int iterations = default_iterations;
+        if(gopt_arg(options, 'i', &arg_string)) {
+                if(sscanf(arg_string, "%d", &iterations) != 1 || iterations < 0) {
+                        die("invalid number of iterations");
+                }
         }
 
-        const char *infilename = argv[1];
-        const char *outfilename = argv[2];
-        FILE *in = fopen(infilename, "rb");
-        if(!in) { die_perror("could not open input file `%s`", infilename); }
-        FILE *out = fopen(outfilename, "wb");
-        if(!out) { die_perror("could not open output file `%s`", outfilename); }
+        FILE *in = fopen(argv[1], "rb");
+        if(!in) { die_perror("could not open input file `%s`", argv[1]); }
+        FILE *out = fopen(argv[2], "wb");
+        if(!out) { die_perror("could not open output file `%s`", argv[2]); }
 
         struct jpeg jpeg;
         read_jpeg(in, &jpeg);
@@ -52,7 +90,7 @@ int main(int argc, char *argv[]) {
                 START_TIMER(compute_1);
                 struct coef *coef = &jpeg.coefs[i];
                 uint16_t *quant_table = jpeg.quant_table[i];
-                compute(coef, quant_table);
+                compute(coef, quant_table, weight, iterations);
                 STOP_TIMER(compute_1);
         }
         STOP_TIMER(computing);

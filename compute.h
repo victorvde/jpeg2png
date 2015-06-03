@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-void compute(struct coef *coef, uint16_t quant_table[64]);
+void compute(struct coef *coef, uint16_t quant_table[64], float weight, int iterations);
 
 #endif

@@ -188,7 +188,7 @@ static void compute_projection(struct coef *coef, struct compute_projection_aux 
         unbox(temp, fdata, w, h);
 }
 
-void compute(struct coef *coef, uint16_t quant_table[64]) {
+void compute(struct coef *coef, uint16_t quant_table[64], float weight, int iterations) {
         struct compute_projection_aux cpa;
         compute_projection_init(coef, quant_table, &cpa);
 
@@ -202,14 +202,13 @@ void compute(struct coef *coef, uint16_t quant_table[64]) {
         float *objective_gradient = fftwf_alloc_real(h * w);
         if(!objective_gradient) { die("allocation error"); }
 
-        const int N = 100;
-        float tv;
-        for(int i = 0; i < N; i++) {
+        float objective = 0.;
+        for(int i = 0; i < iterations; i++) {
                 compute_projection(coef, &cpa);
-                tv = compute_step(coef, fdata_x, fdata_y, objective_gradient, 0.3, 1. / sqrt(1 + N));
+                objective = compute_step(coef, fdata_x, fdata_y, objective_gradient, weight, 1. / sqrt(1 + iterations));
         }
 
-        printf("objective = %f, %f\n", tv, tv / (coef->w * coef->h) / sqrt(2.));
+        printf("objective = %f, %f\n", objective, objective / (coef->w * coef->h) / sqrt(2.));
 
         fftwf_free(fdata_x);
         fftwf_free(fdata_y);

@@ -189,37 +189,6 @@ static void box(float *restrict in, float *restrict out, int w, int h) {
         }
 }
 
-static inline float gradient_x_forward(float *in, int x, int y, int w, int h) {
-        if(x == w-1) {
-                return 0.;
-        } else {
-                return *p(in, x+1, y, w, h) - *p(in, x, y, w, h);
-        }
-}
-static inline float gradient_x_backward(float *in, int x, int y, int w, int h) {
-        if(x == 0) {
-                return 0.;
-        } else {
-                return *p(in, x, y, w, h) - *p(in, x-1, y, w, h);
-        }
-}
-
-static inline float gradient_y_forward(float *in, int x, int y, int w, int h) {
-        if(y == h-1) {
-                return 0.;
-        } else {
-                return *p(in, x, y+1, w, h) - *p(in, x, y, w, h);
-        }
-}
-static inline float gradient_y_backward(float *in, int x, int y, int w, int h) {
-        check(x, y, w, h);
-        if(y == 0) {
-                return 0.;
-        } else {
-                return *p(in, x, y, w, h) - *p(in, x, y-1, w, h);
-        }
-}
-
 #define START_TIMER(n) clock_t macro_timer_##n = start_timer(#n);
 static clock_t start_timer(const char *name) {
         (void) name;
@@ -257,15 +226,21 @@ void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
         }
 }
 
-static float compute_step(struct coef *coef, float step_size) {
+static float compute_step(struct coef *coef, float weight, float step_size) {
         int w = coef->w;
         int h = coef->h;
         float *fdata = coef->fdata;
+        float alpha = weight / sqrt(4. / 2.);
 
-        // float *fdata_x = fftwf_alloc_real(h * w);
-        // if(!fdata_x) { die("allocation error"); }
-        // float *fdata_y = fftwf_alloc_real(h * w);
-        // if(!fdata_y) { die("allocation error"); }
+        float *fdata_x = NULL;
+        float *fdata_y = NULL;
+
+        if(alpha != 0.) {
+                fdata_x = fftwf_alloc_real(h * w);
+                fdata_y = fftwf_alloc_real(h * w);
+                if(!fdata_x) { die("allocation error"); }
+                if(!fdata_y) { die("allocation error"); }
+        }
 
         float *objective_gradient = fftwf_alloc_real(h * w);
         if(!objective_gradient) { die("allocation error"); }
@@ -273,49 +248,82 @@ static float compute_step(struct coef *coef, float step_size) {
                 objective_gradient[i] = 0.;
         }
 
-        float tv = 0;
+        float tv = 0.;
         for(int y = 0; y < h; y++) {
                 for(int x = 0; x < w; x++) {
-                        float g_x = gradient_x_forward(fdata, x, y, w, h);
-                        float g_y = gradient_y_forward(fdata, x, y, w, h);
+                        // forward gradient x
+                        float g_x = x >= w-1 ? 0. : *p(fdata, x+1, y, w, h) - *p(fdata, x, y, w, h);
+                        // forward gradient y
+                        float g_y = y >= h-1 ? 0. : *p(fdata, x, y+1, w, h) - *p(fdata, x, y, w, h);
+                        // norm
                         float g_norm = sqrt(g_x * g_x + g_y * g_y);
                         tv += g_norm;
+                        // compute derivatives
                         if(g_norm != 0) {
-                                if(g_x != 0.) {
-                                        *p(objective_gradient, x, y, w, h) += g_x / g_norm;
-                                        *p(objective_gradient, x+1, y, w, h) -= g_x / g_norm;
+                                *p(objective_gradient, x, y, w, h) += -(g_x + g_y) / g_norm;
+                                if(x < w-1) {
+                                        *p(objective_gradient, x+1, y, w, h) += g_x / g_norm;
                                 }
-                                if(g_y != 0.) {
-                                        *p(objective_gradient, x, y, w, h) += g_y / g_norm;
-                                        *p(objective_gradient, x, y+1, w, h) -= g_y / g_norm;
+                                if(y < h-1) {
+                                        *p(objective_gradient, x, y+1, w, h) += g_y / g_norm;
                                 }
                         }
-                        // *p(fdata_x, x, y, w, h) = g_x;
-                        // *p(fdata_y, x, y, w, h) = g_y;
+                        if(alpha != 0.) {
+                                *p(fdata_x, x, y, w, h) = g_x;
+                                *p(fdata_y, x, y, w, h) = g_y;
+                        }
                 }
         }
         // printf("tv = %f, %f\n", tv, tv / (w * h) / sqrt(2.));
-        for(int i = 0; i < h * w; i++) {
-                fdata[i] += step_size * objective_gradient[i];
+
+        float tv2 = 0;
+        if(alpha != 0.) {
+                for(int y = 0; y < h; y++) {
+                        for(int x = 0; x < w; x++) {
+                                // backward x
+                                float g_xx = x <= 0 ? 0. : *p(fdata_x, x, y, w, h) - *p(fdata_x, x-1, y, w, h);
+                                // forward y
+                                float g_xy = y >= h-1 ? 0. : *p(fdata_x, x, y+1, w, h) - *p(fdata_x, x, y, w, h);
+                                // backward y
+                                float g_yy = y <= 0 ? 0. : *p(fdata_y, x, y, w, h) - *p(fdata_y, x, y-1, w, h);
+                                // norm
+                                float g2_norm = sqrt(g_xx * g_xx + 2 * g_xy * g_xy + g_yy * g_yy);
+                                tv2 += g2_norm;
+                                // compute derivatives
+                                if(g2_norm != 0.) {
+                                        *p(objective_gradient, x, y, w, h) += alpha * (-(2. * g_xx + 2. * g_xy +2. *  g_yy) / g2_norm);
+                                        if(x > 0) {
+                                                *p(objective_gradient, x-1, y, w, h) += alpha * (g_xx / g2_norm);
+                                        }
+                                        if(x < w-1) {
+                                                *p(objective_gradient, x+1, y, w, h) += alpha * ((g_xx + 2. * g_xy) / g2_norm);
+                                        }
+                                        if(y > 0) {
+                                                *p(objective_gradient, x, y-1, w, h) += alpha * (g_yy / g2_norm);
+                                        }
+                                        if(y < h-1) {
+                                                *p(objective_gradient, x, y+1, w, h) += alpha * ((g_yy + 2. * g_xy) / g2_norm);
+                                        }
+                                        if(x < w-1 && y < h-1) {
+                                                *p(objective_gradient, x+1, y+1, w, h) += alpha * (-(2. * g_xy) / g2_norm);
+                                        }
+                                }
+                        }
+                }
+                // printf("tv2 = %f, %f\n", tv2, tv2 / (w * h));
         }
 
-        // float tv2 = 0;
-        // for(int y = 0; y < h; y++) {
-        //         for(int x = 0; x < w; x++) {
-        //                 float g_xx = gradient_x_backward(fdata_x, x, y, w, h);
-        //                 float g_xy = gradient_y_backward(fdata_x, x, y, w, h);
-        //                 float g_yy = gradient_y_backward(fdata_y, x, y, w, h);
-
-        //                 tv2 += sqrt(g_xx * g_xx + 2 * g_xy * g_xy + g_yy * g_yy);
-        //         }
-        // }
-        // printf("tv2 = %f, %f\n", tv2, tv2 / (w * h) / sqrt(4.));
+        for(int i = 0; i < h * w; i++) {
+                fdata[i] -= step_size * (objective_gradient[i] / (alpha + 1.));
+        }
 
         fftwf_free(objective_gradient);
-        // fftwf_free(fdata_x);
-        // fftwf_free(fdata_y);
+        if(alpha != 0.) {
+                fftwf_free(fdata_x);
+                fftwf_free(fdata_y);
+        }
 
-        return tv;
+        return (tv + alpha * tv2) / (alpha + 1.);
 }
 
 struct compute_projection_aux {
@@ -421,10 +429,10 @@ static void compute(struct coef *coef, uint16_t quant_table[64]) {
         float tv;
         for(int i = 0; i < N; i++) {
                 compute_projection(coef, &cpa);
-                tv = compute_step(coef, 1. / sqrt(1 + N));
+                tv = compute_step(coef, 0.3, 1. / sqrt(1 + N));
         }
 
-        printf("TV = %f, %f\n", tv, tv / (coef->w * coef->h) / sqrt(2.));
+        printf("objective = %f, %f\n", tv, tv / (coef->w * coef->h) / sqrt(2.));
 
         compute_projection_destroy(&cpa);
 }

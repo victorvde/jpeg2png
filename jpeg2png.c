@@ -17,6 +17,7 @@
 #define MIN(a, b)  (((a) < (b)) ? (a) : (b))
 #define MAX(a, b)  (((a) > (b)) ? (a) : (b))
 #define CLAMP(x, low, high) (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
+#define DUMP(v, f) do { printf( #v " = " f "\n", v); } while(false)
 
 static noreturn void die(const char *msg, ...)  {
         if(msg) {
@@ -68,16 +69,16 @@ static void read_jpeg(FILE *in, struct jpeg *jpeg) {
         jvirt_barray_ptr *coefs = jpeg_read_coefficients(&d);
         for(int c = 0; c < d.num_components; c++) {
                 jpeg_component_info *i = &d.comp_info[c];
-                int h = ((i->height_in_blocks + i->v_samp_factor - 1) / i->v_samp_factor) * 8;
-                int w = ((i->width_in_blocks + i->h_samp_factor - 1) / i->h_samp_factor) * 8;
+                int h = i->height_in_blocks * 8;
+                int w = i->width_in_blocks * 8;
                 int16_t *data = malloc(w * h * sizeof(int16_t));
                 jpeg->coefs[c].w = w;
                 jpeg->coefs[c].h = h;
                 jpeg->coefs[c].data = data;
                 if(!data) { die("could not allocate memory for coefs"); }
-                for(unsigned y = 0; y < i->height_in_blocks; y+=i->v_samp_factor) {
-                        for(unsigned x = 0; x < i->width_in_blocks; x+=i->h_samp_factor) {
-                                JBLOCKARRAY b = d.mem->access_virt_barray((void*)&d, coefs[c], y, i->v_samp_factor, false);
+                for(int y = 0; y < h / 8; y++) {
+                        JBLOCKARRAY b = d.mem->access_virt_barray((void*)&d, coefs[c], y, 1, false);
+                        for(int x = 0; x < w / 8; x++) {
                                 memcpy(data, b[0][x], 64 * sizeof(int16_t));
                                 data += 64;
                         }
@@ -443,8 +444,6 @@ int main(int argc, char *argv[]) {
         START_TIMER(decoding_coefficients);
         for(int c = 0; c < 3; c++) {
                 struct coef *coef = &jpeg.coefs[c];
-                if(coef->h < jpeg.h) { die("channel %d too short! %d", c, coef->h); }
-                if(coef->w < jpeg.w) { die("channel %d too thin! %d", c, coef->w); }
                 decode_coefficients(coef, jpeg.quant_table[c]);
         }
         STOP_TIMER(decoding_coefficients);
@@ -479,12 +478,56 @@ int main(int argc, char *argv[]) {
         }
         STOP_TIMER(adjusting_luma);
 
+        START_TIMER(upsampling);
+        for(int i = 0; i < 3; i++) {
+                struct coef *coef = &jpeg.coefs[i];
+                if(coef->h < jpeg.h) {
+                        assert(coef->h / 8 == ((jpeg.h + 7) / 8 + 1) / 2);
+                        float *new = fftwf_alloc_real(coef->w * coef->h * 2);
+                        for(int y = 0; y < coef->h; y++) {
+                                for(int x = 0; x < coef->w; x++) {
+                                        new[(y*2)*coef->w + x] = coef->fdata[y * coef->w + x];
+                                }
+                                for(int x = 0; x < coef->w; x++) {
+                                        if(y == coef->h - 1) {
+                                                new[(y*2+1)*coef->w + x] = coef->fdata[y * coef->w + x];
+                                        } else {
+                                                new[(y*2+1)*coef->w + x] = (coef->fdata[y * coef->w + x] + coef->fdata[(y+1) * coef->w + x]) / 2;
+                                        }
+                                }
+                        }
+                        fftwf_free(coef->fdata);
+                        coef->fdata = new;
+                        coef->h = coef->h * 2;
+                }
+                if(coef->w < jpeg.w) {
+                        assert(coef->w / 8 == ((jpeg.w + 7) / 8 + 1) / 2);
+                        float *new = fftwf_alloc_real(coef->w * coef->h * 2);
+                        for(int y = 0; y < coef->h; y++) {
+                                for(int x = 0; x < coef->w; x++) {
+                                        new[(y*coef->w + x)*2] = coef->fdata[y * coef->w + x];
+                                        if(x == coef->w - 1) {
+                                                new[(y*coef->w + x)*2 + 1] = coef->fdata[y * coef->w + x];
+                                        } else {
+                                                new[(y*coef->w + x)*2 + 1] = (coef->fdata[y * coef->w + x] + coef->fdata[y * coef->w + x + 1]) / 2;
+                                        }
+                                }
+                        }
+                        fftwf_free(coef->fdata);
+                        coef->fdata = new;
+                        coef->w = coef->w * 2;
+                }
+        }
+        STOP_TIMER(upsampling);
+
         START_TIMER(writing_png);
         struct coef yc = jpeg.coefs[0];
-        printf("luma: %d x %d\n", yc.w, yc.h);
-        printf("jpeg: %d x %d\n", jpeg.w, jpeg.h);
         struct coef cbc = jpeg.coefs[1];
         struct coef crc = jpeg.coefs[2];
+        printf("luma: %d x %d\n", yc.w, yc.h);
+        printf("chroma blue: %d x %d\n", yc.w, yc.h);
+        printf("chroma red: %d x %d\n", yc.w, yc.h);
+        printf("jpeg: %d x %d\n", jpeg.w, jpeg.h);
         write_png(out, jpeg.w, jpeg.h, yc.fdata, cbc.fdata, crc.fdata);
         fclose(out);
         STOP_TIMER(writing_png);

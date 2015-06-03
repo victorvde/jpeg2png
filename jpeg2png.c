@@ -91,7 +91,7 @@ static float clamp(float x) {
         return CLAMP(x, 0., 255.);
 }
 
-static void write_png(FILE *out, int w, int h, float *y, float *cb, float *cr) {
+static void write_png(FILE *out, int w, int h, struct coef *y, struct coef *cb, struct coef *cr) {
         png_struct *png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
         if(!png_ptr) { die("could not initialize PNG write struct"); }
         png_info *info_ptr = png_create_info_struct(png_ptr);
@@ -107,12 +107,15 @@ static void write_png(FILE *out, int w, int h, float *y, float *cb, float *cr) {
         png_byte *image_data = calloc(sizeof(png_byte), h * w * 3);
         if(!image_data) { die("could not allocate image data");}
 
-        for(int yi = 0; yi < h; yi++) {
-                for(int xi = 0; xi < w; xi++) {
-                        int i = yi * w + xi;
-                        image_data[i*3] = clamp(y[i] + 1.402 * cr[i]);
-                        image_data[i*3+1] = clamp(y[i] - 0.34414 * cb[i] - 0.71414 * cr[i]);
-                        image_data[i*3+2] = clamp(y[i] + 1.772 * cb[i]);
+        for(int i = 0; i < h; i++) {
+                for(int j = 0; j < w; j++) {
+                        int yi = y->fdata[i * y->w + j];
+                        int cbi = cb->fdata[i * cb->w + j];
+                        int cri = cr->fdata[i * cr->w + j];
+
+                        image_data[(i*w+j)*3] = clamp(yi + 1.402 * cri);
+                        image_data[(i*w+j)*3+1] = clamp(yi - 0.34414 * cbi - 0.71414 * cri);
+                        image_data[(i*w+j)*3+2] = clamp(yi + 1.772 * cbi);
                 }
         }
 
@@ -521,14 +524,7 @@ int main(int argc, char *argv[]) {
         STOP_TIMER(upsampling);
 
         START_TIMER(writing_png);
-        struct coef yc = jpeg.coefs[0];
-        struct coef cbc = jpeg.coefs[1];
-        struct coef crc = jpeg.coefs[2];
-        printf("luma: %d x %d\n", yc.w, yc.h);
-        printf("chroma blue: %d x %d\n", yc.w, yc.h);
-        printf("chroma red: %d x %d\n", yc.w, yc.h);
-        printf("jpeg: %d x %d\n", jpeg.w, jpeg.h);
-        write_png(out, jpeg.w, jpeg.h, yc.fdata, cbc.fdata, crc.fdata);
+        write_png(out, jpeg.w, jpeg.h, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);
         fclose(out);
         STOP_TIMER(writing_png);
 

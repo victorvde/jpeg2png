@@ -11,6 +11,7 @@
 #include "utils.h"
 #include "jpeg.h"
 #include "png.h"
+#include "box.h"
 
 static void element_product(const int16_t data[64], const uint16_t quant_table[64], float *out) {
         for(int i = 0; i < 64; i++) {
@@ -23,50 +24,6 @@ static float a(int n) {
                 return 1./sqrt(2.);
         } else {
                 return 1.;
-        }
-}
-
-static inline void check(int x, int y, int w, int h) {
-        assert(0 <= x);
-        assert(x < w);
-        assert(0 <= y);
-        assert(y < h);
-        (void) x;
-        (void) y;
-        (void) w;
-        (void) h;
-}
-
-static inline float *p(float *in, int x, int y, int w, int h) {
-        check(x, y, w, h);
-        return &in[y * w + x];
-}
-
-static void unbox(float *restrict in, float *restrict out, int w, int h) {
-        assert((w & 7) == 0);
-        assert((h & 7) == 0);
-        for(int block_y = 0; block_y < h / 8; block_y++) {
-                for(int block_x = 0; block_x < w / 8; block_x++) {
-                        for(int in_y = 0; in_y < 8; in_y++) {
-                                for(int in_x = 0; in_x < 8; in_x++) {
-                                        *p(out, block_x * 8 + in_x, block_y * 8 + in_y, w, h) = *in++;
-                                }
-                        }
-                }
-        }
-}
-
-static void box(float *restrict in, float *restrict out, int w, int h) {
-        assert((w & 7) == 0);
-        assert((h & 7) == 0);
-        for(int block_y = 0; block_y < h / 8; block_y++) {
-                for(int block_x = 0; block_x < w / 8; block_x++) {
-                        for(int in_y = 0; in_y < 8; in_y++) {
-                                for(int in_x = 0; in_x < 8; in_x++) {
-                                        *out++ = *p(in, block_x * 8 + in_x, block_y * 8 + in_y, w, h);
-                                }
-                        }
-                }
         }
 }
 

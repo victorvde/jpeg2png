@@ -5,7 +5,7 @@ LIBS:=-ljpeg -lpng -lfftw3f -lm
 
 SRCS:=jpeg2png.c utils.c jpeg.c
 
-jpeg2png: jpeg2png.o utils.o jpeg.o png.o
+jpeg2png: jpeg2png.o utils.o jpeg.o png.o box.o
 	$(CC) $^ -o $@ $(LIBS)
 
 %o: %.c *.h

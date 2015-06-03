@@ -16,4 +16,20 @@ void stop_timer(clock_t t, const char *n);
 #define START_TIMER(n) clock_t macro_timer_##n = start_timer(#n);
 #define STOP_TIMER(n) stop_timer(macro_timer_##n, #n);
 
+inline void check(int x, int y, int w, int h) {
+        assert(0 <= x);
+        assert(x < w);
+        assert(0 <= y);
+        assert(y < h);
+        (void) x;
+        (void) y;
+        (void) w;
+        (void) h;
+}
+
+inline float *p(float *in, int x, int y, int w, int h) {
+        check(x, y, w, h);
+        return &in[y * w + x];
+}
+
 #endif

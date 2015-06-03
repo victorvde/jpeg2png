@@ -1,8 +1,10 @@
 #ifndef JPEG2PNG_UTILS_H
 #define JPEG2PNG_UTILS_H
 
+#include <assert.h>
 #include <stdnoreturn.h>
 #include <time.h>
+#include <math.h>
 
 noreturn void die(const char *msg, ...);
 clock_t start_timer(const char *name);
@@ -30,6 +32,14 @@ inline void check(int x, int y, int w, int h) {
 inline float *p(float *in, int x, int y, int w, int h) {
         check(x, y, w, h);
         return &in[y * w + x];
+}
+
+inline float a(int n) {
+        if(n == 0) {
+                return 1./sqrt(2.);
+        } else {
+                return 1.;
+        }
 }
 
 #endif

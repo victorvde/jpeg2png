@@ -1,12 +1,14 @@
 CC:=gcc
-CFLAGS:=-std=c11 -Wall -Wextra -Winline -pedantic -Ofast -march=pentium4 -s -DNDEBUG
+CFLAGS:=-std=c11 -Wall -Wextra -Winline -pedantic -Ofast -march=pentium4 -DNDEBUG
 #CFLAGS:=-std=c11 -Wall -Wextra -pedantic -Og -g
+LFLAGS:=-s
 LIBS:=-ljpeg -lpng -lfftw3f -lm
+OBJS:=jpeg2png.o utils.o jpeg.o png.o box.o upsample.o compute.o
 
-SRCS:=jpeg2png.c utils.c jpeg.c
+jpeg2png: $(OBJS)
+	$(CC) $^ -o $@ $(LFLAGS) $(LIBS)
 
-jpeg2png: jpeg2png.o utils.o jpeg.o png.o box.o
-	$(CC) $^ -o $@ $(LIBS)
+-include $(OBJS:.o=.d)
 
-%o: %.c *.h
-	$(CC) $< -o $@ $(CFLAGS)
+%.o: %.c
+	$(CC) -MMD $< -c -o $@ $(CFLAGS)

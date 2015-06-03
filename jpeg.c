@@ -1,9 +1,12 @@
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 
 #include <jpeglib.h>
+#include <fftw3.h>
 
 #include "jpeg.h"
 #include "utils.h"
@@ -46,4 +49,30 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
                 }
         }
         jpeg_destroy_decompress(&d);
+}
+
+void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
+        coef->fdata = fftwf_alloc_real(coef->h * coef->w);
+        if(!coef->fdata) { die("allocation error"); }
+        int blocks = (coef->h / 8) * (coef->w / 8);
+        for(int i = 0; i < blocks; i++) {
+                for(int j = 0; j < 64; j++) {
+                        coef->fdata[i*64+j] = coef->data[i*64+j] * quant_table[j];
+                }
+                for(int v = 0; v < 8; v++) {
+                        for(int u = 0; u < 8; u++) {
+                                coef->fdata[i*64 + v*8+u] /= a(u) * a(v);
+                        }
+                }
+        }
+        fftwf_plan p = fftwf_plan_many_r2r(
+                2, (int[]){8, 8}, blocks,
+                coef->fdata, (int[]){8, 8}, 1, 64,
+                coef->fdata, (int[]){8, 8}, 1, 64,
+                (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
+        fftwf_execute(p);
+        fftwf_destroy_plan(p);
+        for(int i = 0; i < blocks * 64; i++) {
+                coef->fdata[i] /= 16.;
+        }
 }

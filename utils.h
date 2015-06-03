@@ -7,6 +7,7 @@
 #include <math.h>
 
 noreturn void die(const char *msg, ...);
+noreturn void die_perror(const char *msg, ...);
 clock_t start_timer(const char *name);
 void stop_timer(clock_t t, const char *n);
 

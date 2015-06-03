@@ -20,10 +20,12 @@ int main(int argc, char *argv[]) {
                 die("usage: jpeg2png in.jpg out.png");
         }
 
-        FILE *in = fopen(argv[1], "rb");
-        if(!in) { die(NULL); }
-        FILE *out = fopen(argv[2], "wb");
-        if(!out) { die(NULL); }
+        const char *infilename = argv[1];
+        const char *outfilename = argv[2];
+        FILE *in = fopen(infilename, "rb");
+        if(!in) { die_perror("could not open input file `%s`", infilename); }
+        FILE *out = fopen(outfilename, "wb");
+        if(!out) { die_perror("could not open output file `%s`", outfilename); }
 
         struct jpeg jpeg;
         read_jpeg(in, &jpeg);

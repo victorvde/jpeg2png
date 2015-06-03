@@ -5,16 +5,23 @@
 #include "utils.h"
 
 noreturn void die(const char *msg, ...)  {
-        if(msg) {
-                fprintf(stderr, "jpeg2png: ");
-                va_list l;
-                va_start(l, msg);
-                vfprintf(stderr, msg, l);
-                va_end(l);
-                fprintf(stderr, "\n");
-        } else {
-                perror("jpeg2png");
-        }
+        fprintf(stderr, "jpeg2png: ");
+        va_list l;
+        va_start(l, msg);
+        vfprintf(stderr, msg, l);
+        va_end(l);
+        fprintf(stderr, "\n");
+        exit(EXIT_FAILURE);
+}
+
+noreturn void die_perror(const char *msg, ...)  {
+        fprintf(stderr, "jpeg2png: ");
+        va_list l;
+        va_start(l, msg);
+        vfprintf(stderr, msg, l);
+        va_end(l);
+        fprintf(stderr, ": ");
+        perror(NULL);
         exit(EXIT_FAILURE);
 }
 

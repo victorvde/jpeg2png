@@ -5,8 +5,9 @@
 #include "compute.h"
 #include "utils.h"
 #include "box.h"
+#include "logger.h"
 
-static float compute_step(struct coef *coef, float *objective_gradient, float *fdata_x, float *fdata_y, float weight, float step_size) {
+static void compute_step(struct coef *coef, float *objective_gradient, float *fdata_x, float *fdata_y, float weight, float step_size, struct logger *log) {
         int w = coef->w;
         int h = coef->h;
         float *fdata = coef->fdata;
@@ -42,9 +43,8 @@ static float compute_step(struct coef *coef, float *objective_gradient, float *f
                         }
                 }
         }
-        // printf("tv = %f, %f\n", tv, tv / (w * h) / sqrt(2.));
 
-        float tv2 = 0;
+        float tv2 = 0.;
         if(alpha != 0.) {
                 for(int y = 0; y < h; y++) {
                         for(int x = 0; x < w; x++) {
@@ -83,14 +83,14 @@ static float compute_step(struct coef *coef, float *objective_gradient, float *f
                                 }
                         }
                 }
-                // printf("tv2 = %f, %f\n", tv2, tv2 / (w * h));
         }
 
         for(int i = 0; i < h * w; i++) {
                 fdata[i] -= step_size * (objective_gradient[i] / (alpha + 1.));
         }
 
-        return (tv + alpha * tv2) / (alpha + 1.);
+        float objective = (tv + alpha * tv2) / (alpha + 1.);
+        logger_log(log, objective, tv, tv2);
 }
 
 struct compute_projection_aux {
@@ -188,7 +188,7 @@ static void compute_projection(struct coef *coef, struct compute_projection_aux 
         unbox(temp, fdata, w, h);
 }
 
-void compute(struct coef *coef, uint16_t quant_table[64], float weight, int iterations) {
+void compute(struct coef *coef, struct logger *log, uint16_t quant_table[64], float weight, int iterations) {
         struct compute_projection_aux cpa;
         compute_projection_init(coef, quant_table, &cpa);
 
@@ -202,13 +202,11 @@ void compute(struct coef *coef, uint16_t quant_table[64], float weight, int iter
         float *objective_gradient = fftwf_alloc_real(h * w);
         if(!objective_gradient) { die("allocation error"); }
 
-        float objective = 0.;
         for(int i = 0; i < iterations; i++) {
+                log->iteration = i;
                 compute_projection(coef, &cpa);
-                objective = compute_step(coef, fdata_x, fdata_y, objective_gradient, weight, 1. / sqrt(1 + iterations));
+                compute_step(coef, fdata_x, fdata_y, objective_gradient, weight, 1. / sqrt(1 + iterations), log);
         }
-
-        printf("objective = %f, %f\n", objective, objective / (coef->w * coef->h) / sqrt(2.));
 
         fftwf_free(fdata_x);
         fftwf_free(fdata_y);

@@ -13,13 +13,14 @@
 #include "box.h"
 #include "upsample.h"
 #include "compute.h"
+#include "logger.h"
 
 static const float default_weight = 0.3;
 static const int default_iterations = 100;
 
 noreturn static void usage() {
         printf(
-                "usage: jpeg2png in.jpg out.png [-w weight] [-i iterations]\n"
+                "usage: jpeg2png in.jpg out.png [-w weight] [-i iterations] [-c csv_log]\n"
                 "\n"
                 "-w weight\n"
                 "--second-order-weight weight\n"
@@ -34,6 +35,11 @@ noreturn static void usage() {
                 "\titerations is an integer for the number of optimization steps\n"
                 "\thigher values give better results but take more time\n"
                 "\tdefault value: %d\n"
+                "\n"
+                "-c csv_log\n"
+                "--csv_log csv_log\n"
+                "\tcsv_log is a file name for the optimization log\n"
+                "\tdefault: none\n"
                 , default_weight, default_iterations);
         exit(EXIT_FAILURE);
 }
@@ -41,6 +47,7 @@ noreturn static void usage() {
 int main(int argc, const char **argv) {
         void *options = gopt_sort(&argc, argv, gopt_start(
                 gopt_option('h', GOPT_NOARG, gopt_shorts( 'h', '?' ), gopt_longs("help")),
+                gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs("csv-log")),
                 gopt_option('i', GOPT_ARG, gopt_shorts('i'), gopt_longs("iterations")),
                 gopt_option('w', GOPT_ARG, gopt_shorts('w'), gopt_longs("second-order-weight"))));
         if(argc != 3 || gopt(options, 'h')) {
@@ -65,6 +72,12 @@ int main(int argc, const char **argv) {
         FILE *out = fopen(argv[2], "wb");
         if(!out) { die_perror("could not open output file `%s`", argv[2]); }
 
+        FILE *csv_log = NULL;
+        if(gopt_arg(options, 'c', &arg_string)) {
+                csv_log = fopen(arg_string, "wb");
+                if(!csv_log) { die_perror("could not open csv log `%s`", csv_log); }
+        }
+
         struct jpeg jpeg;
         read_jpeg(in, &jpeg);
         fclose(in);
@@ -86,14 +99,20 @@ int main(int argc, const char **argv) {
         }
 
         START_TIMER(computing);
+        struct logger log;
+        logger_start(&log, csv_log);
         for(int i = 0; i < 3; i++) {
+                log.channel = i;
                 START_TIMER(compute_1);
                 struct coef *coef = &jpeg.coefs[i];
                 uint16_t *quant_table = jpeg.quant_table[i];
-                compute(coef, quant_table, weight, iterations);
+                compute(coef, &log, quant_table, weight, iterations);
                 STOP_TIMER(compute_1);
         }
         STOP_TIMER(computing);
+        if(csv_log) {
+                fclose(csv_log);
+        }
 
         struct coef *coef = &jpeg.coefs[0];
         for(int i = 0; i < coef->h * coef->w; i++) {

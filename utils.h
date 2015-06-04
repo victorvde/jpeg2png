@@ -5,6 +5,7 @@
 #include <stdnoreturn.h>
 #include <time.h>
 #include <math.h>
+#include <stdbool.h>
 
 noreturn void die(const char *msg, ...);
 noreturn void die_perror(const char *msg, ...);

@@ -43,4 +43,8 @@ inline float a(int n) {
         }
 }
 
+inline float sqr(float x) {
+        return x * x;
+}
+
 #endif

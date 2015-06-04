@@ -25,7 +25,7 @@ static void compute_step(struct coef *coef, float *objective_gradient, float *fd
                         // forward gradient y
                         float g_y = y >= h-1 ? 0. : *p(fdata, x, y+1, w, h) - *p(fdata, x, y, w, h);
                         // norm
-                        float g_norm = sqrt(g_x * g_x + g_y * g_y);
+                        float g_norm = sqrt(sqr(g_x) + sqr(g_y));
                         tv += g_norm;
                         // compute derivatives
                         if(g_norm != 0) {
@@ -57,7 +57,7 @@ static void compute_step(struct coef *coef, float *objective_gradient, float *fd
                                 // backward y
                                 float g_yy = y <= 0 ? 0. : *p(fdata_y, x, y, w, h) - *p(fdata_y, x, y-1, w, h);
                                 // norm
-                                float g2_norm = sqrt(g_xx * g_xx + g_yx * g_yx + g_xy * g_xy + g_yy * g_yy);
+                                float g2_norm = sqrt(sqr(g_xx) + sqr(g_yx) + sqr(g_xy) + sqr(g_yy));
                                 tv2 += g2_norm;
                                 // compute derivatives
                                 if(g2_norm != 0.) {
@@ -85,8 +85,15 @@ static void compute_step(struct coef *coef, float *objective_gradient, float *fd
                 }
         }
 
+        float norm = 0.;
         for(int i = 0; i < h * w; i++) {
-                fdata[i] -= step_size * (objective_gradient[i] / (alpha + 1.));
+                norm += sqr(objective_gradient[i]);
+        }
+        norm = sqrt(norm);
+
+        float radius = sqrt(w*h) / 2;
+        for(int i = 0; i < h * w; i++) {
+                fdata[i] -= step_size * radius * (objective_gradient[i] /  norm);
         }
 
         float objective = (tv + alpha * tv2) / (alpha + 1.);

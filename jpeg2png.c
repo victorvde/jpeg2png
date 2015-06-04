@@ -16,7 +16,7 @@
 #include "logger.h"
 
 static const float default_weight = 0.3;
-static const int default_iterations = 100;
+static const int default_iterations = 50;
 
 noreturn static void usage() {
         printf(

@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <string.h>
 #include <fftw3.h>
 
 #include "jpeg2png.h"
@@ -7,10 +8,7 @@
 #include "box.h"
 #include "logger.h"
 
-static void compute_step(struct coef *coef, float *objective_gradient, float *fdata_x, float *fdata_y, float weight, float step_size, struct logger *log) {
-        int w = coef->w;
-        int h = coef->h;
-        float *fdata = coef->fdata;
+static float compute_step(int w, int h, float *in, float *out, float step_size, float weight, float *objective_gradient, float *in_x, float *in_y, struct logger *log) {
         float alpha = weight / sqrt(4. / 2.);
 
         for(int i = 0; i < h * w; i++) {
@@ -21,9 +19,9 @@ static void compute_step(struct coef *coef, float *objective_gradient, float *fd
         for(int y = 0; y < h; y++) {
                 for(int x = 0; x < w; x++) {
                         // forward gradient x
-                        float g_x = x >= w-1 ? 0. : *p(fdata, x+1, y, w, h) - *p(fdata, x, y, w, h);
+                        float g_x = x >= w-1 ? 0. : *p(in, x+1, y, w, h) - *p(in, x, y, w, h);
                         // forward gradient y
-                        float g_y = y >= h-1 ? 0. : *p(fdata, x, y+1, w, h) - *p(fdata, x, y, w, h);
+                        float g_y = y >= h-1 ? 0. : *p(in, x, y+1, w, h) - *p(in, x, y, w, h);
                         // norm
                         float g_norm = sqrt(sqr(g_x) + sqr(g_y));
                         tv += g_norm;
@@ -38,8 +36,8 @@ static void compute_step(struct coef *coef, float *objective_gradient, float *fd
                                 }
                         }
                         if(alpha != 0.) {
-                                *p(fdata_x, x, y, w, h) = g_x;
-                                *p(fdata_y, x, y, w, h) = g_y;
+                                *p(in_x, x, y, w, h) = g_x;
+                                *p(in_y, x, y, w, h) = g_y;
                         }
                 }
         }
@@ -49,13 +47,13 @@ static void compute_step(struct coef *coef, float *objective_gradient, float *fd
                 for(int y = 0; y < h; y++) {
                         for(int x = 0; x < w; x++) {
                                 // backward x
-                                float g_xx = x <= 0 ? 0. : *p(fdata_x, x, y, w, h) - *p(fdata_x, x-1, y, w, h);
+                                float g_xx = x <= 0 ? 0. : *p(in_x, x, y, w, h) - *p(in_x, x-1, y, w, h);
                                 // backward x
-                                float g_yx = x <= 0 ? 0. : *p(fdata_y, x, y, w, h) - *p(fdata_y, x-1, y, w, h);
+                                float g_yx = x <= 0 ? 0. : *p(in_y, x, y, w, h) - *p(in_y, x-1, y, w, h);
                                 // backward y
-                                float g_xy = y <= 0 ? 0. : *p(fdata_x, x, y, w, h) - *p(fdata_x, x, y-1, w, h);
+                                float g_xy = y <= 0 ? 0. : *p(in_x, x, y, w, h) - *p(in_x, x, y-1, w, h);
                                 // backward y
-                                float g_yy = y <= 0 ? 0. : *p(fdata_y, x, y, w, h) - *p(fdata_y, x, y-1, w, h);
+                                float g_yy = y <= 0 ? 0. : *p(in_y, x, y, w, h) - *p(in_y, x, y-1, w, h);
                                 // norm
                                 float g2_norm = sqrt(sqr(g_xx) + sqr(g_yx) + sqr(g_xy) + sqr(g_yy));
                                 tv2 += g2_norm;
@@ -91,13 +89,14 @@ static void compute_step(struct coef *coef, float *objective_gradient, float *fd
         }
         norm = sqrt(norm);
 
-        float radius = sqrt(w*h) / 2;
         for(int i = 0; i < h * w; i++) {
-                fdata[i] -= step_size * radius * (objective_gradient[i] /  norm);
+                out[i] = in[i] - step_size * (objective_gradient[i] /  norm);
         }
 
         float objective = (tv + alpha * tv2) / (alpha + 1.);
         logger_log(log, objective, tv, tv2);
+
+        return objective;
 }
 
 struct compute_projection_aux {
@@ -167,11 +166,7 @@ static void compute_projection_destroy(struct compute_projection_aux *aux) {
         fftwf_free(aux->q_max);
 }
 
-static void compute_projection(struct coef *coef, struct compute_projection_aux *aux) {
-        int w = coef->w;
-        int h = coef->h;
-        float *fdata = coef->fdata;
-
+static void compute_projection(int w, int h, float *fdata, struct compute_projection_aux *aux) {
         float *temp = aux->temp;
 
         int blocks = (h / 8) * (w / 8);
@@ -202,21 +197,38 @@ void compute(struct coef *coef, struct logger *log, uint16_t quant_table[64], fl
         int h = coef->h;
         int w = coef->w;
 
-        float *fdata_x = fftwf_alloc_real(h * w);
-        if(!fdata_x) { die("allocation error"); }
-        float *fdata_y = fftwf_alloc_real(h * w);
-        if(!fdata_y) { die("allocation error"); }
-        float *objective_gradient = fftwf_alloc_real(h * w);
-        if(!objective_gradient) { die("allocation error"); }
+        float *temp_x = fftwf_alloc_real(h * w);
+        if(!temp_x) { die("allocation error"); }
+        float *temp_y = fftwf_alloc_real(h * w);
+        if(!temp_y) { die("allocation error"); }
+        float *temp_gradient = fftwf_alloc_real(h * w);
+        if(!temp_gradient) { die("allocation error"); }
 
+        float *temp_fista = fftwf_alloc_real(h * w);
+        if(!temp_fista) { die("allocation error"); }
+        memcpy(temp_fista, coef->fdata, sizeof(float) * w * h);
+
+        float radius = sqrt(w*h) / 2;
         for(int i = 0; i < iterations; i++) {
                 log->iteration = i;
-                compute_projection(coef, &cpa);
-                compute_step(coef, fdata_x, fdata_y, objective_gradient, weight, 1. / sqrt(1 + iterations), log);
+
+                float k = i;
+                for(int j = 0; j < w * h; j++) {
+                        temp_fista[j] = coef->fdata[j] + (k - 2.)/(k+1.) * (coef->fdata[j] - temp_fista[j]);
+                }
+
+                compute_step(w, h, temp_fista, temp_fista, radius / sqrt(1 + iterations), weight, temp_x, temp_y, temp_gradient, log);
+                compute_projection(w, h, temp_fista, &cpa);
+
+                float *t = coef->fdata;
+                coef->fdata = temp_fista;
+                temp_fista = t;
         }
 
-        fftwf_free(fdata_x);
-        fftwf_free(fdata_y);
-        fftwf_free(objective_gradient);
+        fftwf_free(temp_x);
+        fftwf_free(temp_y);
+        fftwf_free(temp_gradient);
+        fftwf_free(temp_fista);
+
         compute_projection_destroy(&cpa);
 }

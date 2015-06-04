@@ -22,18 +22,20 @@ noreturn static void usage() {
         printf(
                 "usage: jpeg2png in.jpg out.png [-w weight] [-i iterations] [-c csv_log]\n"
                 "\n"
-                "-w weight\n"
-                "--second-order-weight weight\n"
-                "\tweight is a floating point number between 0.0 and 1.0 for TVG weight alpha_1\n"
+                "-w weight[,weight_cb,weight_cr]\n"
+                "--second-order-weight weight[,weight_cb,weight_cr]\n"
+                "\tweight is a floating point number for TVG weight alpha_1\n"
                 "\thigher values give smoother transitions with less staircasing\n"
                 "\ta value of 1.0 means equivalent weight to the first order weight\n"
                 "\ta value of 0.0 means plain Total Variation, and gives a speed boost\n"
+                "\tweights for the chroma channels always default to 0.\n"
                 "\tdefault value: %g\n"
                 "\n"
-                "-i iterations\n"
-                "--iterations iterations\n"
+                "-i iterations[,iterations_cb,iterations_cr]\n"
+                "--iterations iterations[,iterations_cb,iterations_cr]\n"
                 "\titerations is an integer for the number of optimization steps\n"
                 "\thigher values give better results but take more time\n"
+                "\titerations for the chroma channels default to the luma iterations\n"
                 "\tdefault value: %d\n"
                 "\n"
                 "-c csv_log\n"
@@ -54,15 +56,24 @@ int main(int argc, const char **argv) {
                 usage();
         }
         const char *arg_string;
-        float weight = default_weight;
+        float weights[3] = {default_weight, 0., 0.};
         if(gopt_arg(options, 'w', &arg_string)) {
-                if(sscanf(arg_string, "%f", &weight) != 1) {
+                int n = sscanf(arg_string, "%f,%f,%f", &weights[0], &weights[1], &weights[2]);
+                if(n == 3 || n == 1) {
+                        // ok
+                } else {
                         die("invalid weight");
                 }
         }
-        int iterations = default_iterations;
+        int iterations[3] = {default_iterations, default_iterations, default_iterations};
         if(gopt_arg(options, 'i', &arg_string)) {
-                if(sscanf(arg_string, "%d", &iterations) != 1 || iterations < 0) {
+                int n = sscanf(arg_string, "%d,%d,%d", &iterations[0], &iterations[1], &iterations[2]);
+                if(n == 3) {
+                        // ok
+                } else if(n == 1) {
+                        iterations[1] = iterations[0];
+                        iterations[2] = iterations[0];
+                } else {
                         die("invalid number of iterations");
                 }
         }
@@ -77,6 +88,8 @@ int main(int argc, const char **argv) {
                 csv_log = fopen(arg_string, "wb");
                 if(!csv_log) { die_perror("could not open csv log `%s`", csv_log); }
         }
+
+        gopt_free(options);
 
         struct jpeg jpeg;
         read_jpeg(in, &jpeg);
@@ -106,7 +119,7 @@ int main(int argc, const char **argv) {
                 START_TIMER(compute_1);
                 struct coef *coef = &jpeg.coefs[i];
                 uint16_t *quant_table = jpeg.quant_table[i];
-                compute(coef, &log, quant_table, weight, iterations);
+                compute(coef, &log, quant_table, weights[i], iterations[i]);
                 STOP_TIMER(compute_1);
         }
         STOP_TIMER(computing);

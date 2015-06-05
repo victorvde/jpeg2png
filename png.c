@@ -27,9 +27,9 @@ void write_png(FILE *out, unsigned w, unsigned h, struct coef *y, struct coef *c
 
         for(unsigned i = 0; i < h; i++) {
                 for(unsigned j = 0; j < w; j++) {
-                        float yi = *p(y->fdata, i, j, y->w, y->h);
-                        float cbi = *p(cb->fdata, i, j, cb->w, cb->h);
-                        float cri = *p(cr->fdata, i, j, cr->w, cb->h);
+                        float yi = *p(y->fdata, j, i, y->w, y->h);
+                        float cbi = *p(cb->fdata, j, i, cb->w, cb->h);
+                        float cri = *p(cr->fdata, j, i, cr->w, cr->h);
 
                         image_data[(i*w+j)*3] = clamp(yi + 1.402 * cri);
                         image_data[(i*w+j)*3+1] = clamp(yi - 0.34414 * cbi - 0.71414 * cri);

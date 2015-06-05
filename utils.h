@@ -7,6 +7,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 noreturn void die(const char *msg, ...);
 noreturn void die_perror(const char *msg, ...);
@@ -17,15 +18,15 @@ void stop_timer(clock_t t, const char *n);
 #define MAX(a, b)  (((a) > (b)) ? (a) : (b))
 #define CLAMP(x, low, high) (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 #define DUMP(v, f) do { printf( #v " = " f "\n", v); } while(false)
-#ifdef NDEBUG
-  #ifdef BUILTIN_UNREACHABLE
-    #define ASSUME(x) do { if(!(x)) { __builtin_unreachable(); } } while(false)
-    // #define ASSUME(x) (void)0
-  #else
-    #define ASSUME(x) do { if(!(x)) { abort(); } } while(false)
-  #endif
+#if defined(NDEBUG) && defined(BUILTIN_UNREACHABLE)
+  #define ASSUME(x) do { if(!(x)) { __builtin_unreachable(); } } while(false)
 #else
   #define ASSUME(x) assert(x)
+#endif
+#if defined(NDEBUG) && defined(BUILTIN_ASSUME_ALIGNED)
+  #define ASSUME_ALIGNED(x) x = __builtin_assume_aligned(x, 16)
+#else
+  #define ASSUME_ALIGNED(x) ASSUME((((uintptr_t)p) & 15) == 0)
 #endif
 
 #define START_TIMER(n) clock_t macro_timer_##n = start_timer(#n);

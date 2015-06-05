@@ -4,6 +4,8 @@
 void unbox(float *restrict in, float *restrict out, unsigned w, unsigned h) {
         ASSUME((w & 7) == 0);
         ASSUME((h & 7) == 0);
+        ASSUME_ALIGNED(in);
+        ASSUME_ALIGNED(out);
         for(unsigned block_y = 0; block_y < h / 8; block_y++) {
                 for(unsigned block_x = 0; block_x < w / 8; block_x++) {
                         for(unsigned in_y = 0; in_y < 8; in_y++) {
@@ -18,6 +20,8 @@ void unbox(float *restrict in, float *restrict out, unsigned w, unsigned h) {
 void box(float *restrict in, float *restrict out, unsigned w, unsigned h) {
         ASSUME((w & 7) == 0);
         ASSUME((h & 7) == 0);
+        ASSUME_ALIGNED(in);
+        ASSUME_ALIGNED(out);
         for(unsigned block_y = 0; block_y < h / 8; block_y++) {
                 for(unsigned block_x = 0; block_x < w / 8; block_x++) {
                         for(unsigned in_y = 0; in_y < 8; in_y++) {

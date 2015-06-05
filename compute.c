@@ -8,8 +8,14 @@
 #include "box.h"
 #include "logger.h"
 
-static float compute_step(unsigned w, unsigned h, float *in, float *out, float step_size, float weight, float *objective_gradient, float *in_x, float *in_y, struct logger *log) {
+static float compute_step(unsigned w, unsigned h, float *in, float *out, float step_size, float weight, float *restrict objective_gradient, float *restrict in_x, float *restrict in_y, struct logger *log) {
         float alpha = weight / sqrt(4. / 2.);
+
+        ASSUME_ALIGNED(in);
+        ASSUME_ALIGNED(out);
+        ASSUME_ALIGNED(objective_gradient);
+        ASSUME_ALIGNED(in_x);
+        ASSUME_ALIGNED(in_y);
 
         for(unsigned i = 0; i < h * w; i++) {
                 objective_gradient[i] = 0.;
@@ -107,7 +113,7 @@ struct compute_projection_aux {
         fftwf_plan idct;
 };
 
-static void compute_projection_init(struct coef *coef, uint16_t quant_table[64],struct compute_projection_aux *aux) {
+static void compute_projection_init(struct coef *coef, uint16_t quant_table[64], struct compute_projection_aux *aux) {
         unsigned w = coef->w;
         unsigned h = coef->h;
 
@@ -166,7 +172,12 @@ static void compute_projection_destroy(struct compute_projection_aux *aux) {
         fftwf_free(aux->q_max);
 }
 
-static void compute_projection(unsigned w, unsigned h, float *fdata, struct compute_projection_aux *aux) {
+static void compute_projection(unsigned w, unsigned h, float *restrict fdata, struct compute_projection_aux *aux) {
+        ASSUME_ALIGNED(fdata);
+        ASSUME_ALIGNED(aux->q_min);
+        ASSUME_ALIGNED(aux->q_min);
+        ASSUME_ALIGNED(aux->temp);
+
         float *temp = aux->temp;
 
         unsigned blocks = (h / 8) * (w / 8);

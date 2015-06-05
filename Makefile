@@ -1,5 +1,5 @@
 CC:=gcc
-CFLAGS:=-std=c11 -pedantic -Ofast -msse2 -mfpmath=sse -DNDEBUG
+CFLAGS:=-std=c11 -pedantic -Ofast -msse2 -mfpmath=sse -DNDEBUG -DBUILTIN_UNREACHABLE -DBUILTIN_ASSUME_ALIGNED
 WARN_FLAGS:=-Wall -Wextra -Winline
 # CFLAGS:=-std=c11 -pedantic -Og -g
 LFLAGS:= -s

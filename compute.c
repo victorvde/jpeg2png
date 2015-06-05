@@ -113,10 +113,7 @@ struct compute_projection_aux {
         fftwf_plan idct;
 };
 
-static void compute_projection_init(struct coef *coef, uint16_t quant_table[64], struct compute_projection_aux *aux) {
-        unsigned w = coef->w;
-        unsigned h = coef->h;
-
+static void compute_projection_init(unsigned w, unsigned h, int16_t *data, uint16_t quant_table[64], struct compute_projection_aux *aux) {
         float *q_max = alloc_real(h * w);
         if(!q_max) { die("allocation error"); }
         float *q_min = alloc_real(h * w);
@@ -125,8 +122,8 @@ static void compute_projection_init(struct coef *coef, uint16_t quant_table[64],
 
         for(unsigned i = 0; i < blocks; i++) {
                 for(unsigned j = 0; j < 64; j++) {
-                       q_max[i*64+j] = (coef->data[i*64+j] + 0.5) * quant_table[j];
-                       q_min[i*64+j] = (coef->data[i*64+j] - 0.5) * quant_table[j];
+                       q_max[i*64+j] = (data[i*64+j] + 0.5) * quant_table[j];
+                       q_min[i*64+j] = (data[i*64+j] - 0.5) * quant_table[j];
                 }
         }
 
@@ -167,9 +164,9 @@ static void compute_projection_init(struct coef *coef, uint16_t quant_table[64],
 static void compute_projection_destroy(struct compute_projection_aux *aux) {
         fftwf_destroy_plan(aux->idct);
         fftwf_destroy_plan(aux->dct);
-        fftwf_free(aux->temp);
-        fftwf_free(aux->q_min);
-        fftwf_free(aux->q_max);
+        free(aux->temp);
+        free(aux->q_min);
+        free(aux->q_max);
 }
 
 static void compute_projection(unsigned w, unsigned h, float *fdata, struct compute_projection_aux *aux) {
@@ -185,7 +182,7 @@ static void compute_projection(unsigned w, unsigned h, float *fdata, struct comp
         }
 
         for(unsigned i = 0; i < h * w; i++) {
-                temp[i] = CLAMP(temp[i], aux->q_min[i], aux->q_max[i]);
+                temp[i] = fmin(fmax(temp[i], aux->q_min[i]), aux->q_max[i]);
         }
 
         fftwf_execute(aux->idct);
@@ -197,13 +194,13 @@ static void compute_projection(unsigned w, unsigned h, float *fdata, struct comp
 }
 
 void compute(struct coef *coef, struct logger *log, uint16_t quant_table[64], float weight, unsigned iterations) {
-        struct compute_projection_aux cpa;
-        compute_projection_init(coef, quant_table, &cpa);
-
         unsigned h = coef->h;
         unsigned w = coef->w;
+        float *fdata = coef->fdata;
+        ASSUME_ALIGNED(fdata);
 
-        ASSUME_ALIGNED(coef->fdata);
+        struct compute_projection_aux cpa;
+        compute_projection_init(w, h, coef->data, quant_table, &cpa);
 
         float *temp_x = alloc_real(h * w);
         if(!temp_x) { die("allocation error"); }
@@ -214,7 +211,7 @@ void compute(struct coef *coef, struct logger *log, uint16_t quant_table[64], fl
 
         float *temp_fista = alloc_real(h * w);
         if(!temp_fista) { die("allocation error"); }
-        memcpy(temp_fista, coef->fdata, sizeof(float) * w * h);
+        memcpy(temp_fista, fdata, sizeof(float) * w * h);
 
         float radius = sqrt(w*h) / 2;
         for(unsigned i = 0; i < iterations; i++) {
@@ -222,21 +219,22 @@ void compute(struct coef *coef, struct logger *log, uint16_t quant_table[64], fl
 
                 float k = i;
                 for(unsigned j = 0; j < w * h; j++) {
-                        temp_fista[j] = coef->fdata[j] + (k - 2.)/(k+1.) * (coef->fdata[j] - temp_fista[j]);
+                        temp_fista[j] = fdata[j] + (k - 2.)/(k+1.) * (fdata[j] - temp_fista[j]);
                 }
 
                 compute_step(w, h, temp_fista, temp_fista, radius / sqrt(1 + iterations), weight, temp_x, temp_y, temp_gradient, log);
                 compute_projection(w, h, temp_fista, &cpa);
 
-                float *t = coef->fdata;
-                coef->fdata = temp_fista;
+                float *t = fdata;
+                fdata = temp_fista;
                 temp_fista = t;
         }
 
-        fftwf_free(temp_x);
-        fftwf_free(temp_y);
-        fftwf_free(temp_gradient);
-        fftwf_free(temp_fista);
+        coef->fdata = fdata;
+        free(temp_x);
+        free(temp_y);
+        free(temp_gradient);
+        free(temp_fista);
 
         compute_projection_destroy(&cpa);
 }

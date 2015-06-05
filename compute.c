@@ -8,19 +8,8 @@
 #include "box.h"
 #include "logger.h"
 
-static float compute_step(unsigned w, unsigned h, float *in, float *out, float step_size, float weight, float *restrict objective_gradient, float *restrict in_x, float *restrict in_y, struct logger *log) {
-        float alpha = weight / sqrt(4. / 2.);
 
-        ASSUME_ALIGNED(in);
-        ASSUME_ALIGNED(out);
-        ASSUME_ALIGNED(objective_gradient);
-        ASSUME_ALIGNED(in_x);
-        ASSUME_ALIGNED(in_y);
-
-        for(unsigned i = 0; i < h * w; i++) {
-                objective_gradient[i] = 0.;
-        }
-
+static float compute_step_tv(unsigned w, unsigned h, float *in, float *objective_gradient, float *in_x, float *in_y) {
         float tv = 0.;
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
@@ -41,53 +30,64 @@ static float compute_step(unsigned w, unsigned h, float *in, float *out, float s
                                         *p(objective_gradient, x, y+1, w, h) += g_y / g_norm;
                                 }
                         }
-                        if(alpha != 0.) {
-                                *p(in_x, x, y, w, h) = g_x;
-                                *p(in_y, x, y, w, h) = g_y;
-                        }
+                        *p(in_x, x, y, w, h) = g_x;
+                        *p(in_y, x, y, w, h) = g_y;
                 }
         }
+        return tv;
+}
 
+static float compute_step_tv2(unsigned w, unsigned h, float *objective_gradient, float *in_x, float *in_y, float alpha) {
         float tv2 = 0.;
-        if(alpha != 0.) {
-                for(unsigned y = 0; y < h; y++) {
-                        for(unsigned x = 0; x < w; x++) {
-                                // backward x
-                                float g_xx = x <= 0 ? 0. : *p(in_x, x, y, w, h) - *p(in_x, x-1, y, w, h);
-                                // backward x
-                                float g_yx = x <= 0 ? 0. : *p(in_y, x, y, w, h) - *p(in_y, x-1, y, w, h);
-                                // backward y
-                                float g_xy = y <= 0 ? 0. : *p(in_x, x, y, w, h) - *p(in_x, x, y-1, w, h);
-                                // backward y
-                                float g_yy = y <= 0 ? 0. : *p(in_y, x, y, w, h) - *p(in_y, x, y-1, w, h);
-                                // norm
-                                float g2_norm = sqrt(sqr(g_xx) + sqr(g_yx) + sqr(g_xy) + sqr(g_yy));
-                                tv2 += g2_norm;
-                                // compute derivatives
-                                if(g2_norm != 0.) {
-                                        *p(objective_gradient, x, y, w, h) += alpha * (-(2. * g_xx + g_xy + g_yx + 2. *  g_yy) / g2_norm);
-                                        if(x > 0) {
-                                                *p(objective_gradient, x-1, y, w, h) += alpha * ((g_yx + g_xx) / g2_norm);
-                                        }
-                                        if(x < w-1) {
-                                                *p(objective_gradient, x+1, y, w, h) += alpha * ((g_xx + g_xy) / g2_norm);
-                                        }
-                                        if(y > 0) {
-                                                *p(objective_gradient, x, y-1, w, h) += alpha * ((g_yy + g_xy) / g2_norm);
-                                        }
-                                        if(y < h-1) {
-                                                *p(objective_gradient, x, y+1, w, h) += alpha * ((g_yy + g_yx) / g2_norm);
-                                        }
-                                        if(x < w-1 && y > 0) {
-                                                *p(objective_gradient, x+1, y-1, w, h) += alpha * ((-g_xy) / g2_norm);
-                                        }
-                                        if(x > 0 && y < h-1) {
-                                                *p(objective_gradient, x-1, y+1, w, h) += alpha * ((-g_yx) / g2_norm);
-                                        }
+        for(unsigned y = 0; y < h; y++) {
+                for(unsigned x = 0; x < w; x++) {
+                        // backward x
+                        float g_xx = x <= 0 ? 0. : *p(in_x, x, y, w, h) - *p(in_x, x-1, y, w, h);
+                        // backward x
+                        float g_yx = x <= 0 ? 0. : *p(in_y, x, y, w, h) - *p(in_y, x-1, y, w, h);
+                        // backward y
+                        float g_xy = y <= 0 ? 0. : *p(in_x, x, y, w, h) - *p(in_x, x, y-1, w, h);
+                        // backward y
+                        float g_yy = y <= 0 ? 0. : *p(in_y, x, y, w, h) - *p(in_y, x, y-1, w, h);
+                        // norm
+                        float g2_norm = sqrt(sqr(g_xx) + sqr(g_yx) + sqr(g_xy) + sqr(g_yy));
+                        tv2 += g2_norm;
+                        // compute derivatives
+                        if(g2_norm != 0.) {
+                                *p(objective_gradient, x, y, w, h) += alpha * (-(2. * g_xx + g_xy + g_yx + 2. *  g_yy) / g2_norm);
+                                if(x > 0) {
+                                        *p(objective_gradient, x-1, y, w, h) += alpha * ((g_yx + g_xx) / g2_norm);
+                                }
+                                if(x < w-1) {
+                                        *p(objective_gradient, x+1, y, w, h) += alpha * ((g_xx + g_xy) / g2_norm);
+                                }
+                                if(y > 0) {
+                                        *p(objective_gradient, x, y-1, w, h) += alpha * ((g_yy + g_xy) / g2_norm);
+                                }
+                                if(y < h-1) {
+                                        *p(objective_gradient, x, y+1, w, h) += alpha * ((g_yy + g_yx) / g2_norm);
+                                }
+                                if(x < w-1 && y > 0) {
+                                        *p(objective_gradient, x+1, y-1, w, h) += alpha * ((-g_xy) / g2_norm);
+                                }
+                                if(x > 0 && y < h-1) {
+                                        *p(objective_gradient, x-1, y+1, w, h) += alpha * ((-g_yx) / g2_norm);
                                 }
                         }
                 }
         }
+        return tv2;
+}
+
+static float compute_step(unsigned w, unsigned h, float *in, float *out, float step_size, float weight, float *objective_gradient, float *in_x, float *in_y, struct logger *log) {
+        float alpha = weight / sqrt(4. / 2.);
+        for(unsigned i = 0; i < h * w; i++) {
+                objective_gradient[i] = 0.;
+        }
+
+        float tv = compute_step_tv(w, h, in, objective_gradient, in_x, in_y);
+
+        float tv2 = alpha == 0. ? 0. : compute_step_tv2(w, h, objective_gradient, in_x, in_y, alpha);
 
         float norm = 0.;
         for(unsigned i = 0; i < h * w; i++) {
@@ -106,8 +106,8 @@ static float compute_step(unsigned w, unsigned h, float *in, float *out, float s
 }
 
 struct compute_projection_aux {
-        float * restrict q_min;
-        float * restrict q_max;
+        float *q_min;
+        float *q_max;
         float *temp;
         fftwf_plan dct;
         fftwf_plan idct;
@@ -172,12 +172,7 @@ static void compute_projection_destroy(struct compute_projection_aux *aux) {
         fftwf_free(aux->q_max);
 }
 
-static void compute_projection(unsigned w, unsigned h, float *restrict fdata, struct compute_projection_aux *aux) {
-        ASSUME_ALIGNED(fdata);
-        ASSUME_ALIGNED(aux->q_min);
-        ASSUME_ALIGNED(aux->q_min);
-        ASSUME_ALIGNED(aux->temp);
-
+static void compute_projection(unsigned w, unsigned h, float *fdata, struct compute_projection_aux *aux) {
         float *temp = aux->temp;
 
         unsigned blocks = (h / 8) * (w / 8);
@@ -208,6 +203,8 @@ void compute(struct coef *coef, struct logger *log, uint16_t quant_table[64], fl
         unsigned h = coef->h;
         unsigned w = coef->w;
 
+        ASSUME_ALIGNED(coef->fdata);
+
         float *temp_x = alloc_real(h * w);
         if(!temp_x) { die("allocation error"); }
         float *temp_y = alloc_real(h * w);
@@ -223,8 +220,6 @@ void compute(struct coef *coef, struct logger *log, uint16_t quant_table[64], fl
         for(unsigned i = 0; i < iterations; i++) {
                 log->iteration = i;
 
-                ASSUME_ALIGNED(temp_fista);
-                ASSUME_ALIGNED(coef->fdata);
                 float k = i;
                 for(unsigned j = 0; j < w * h; j++) {
                         temp_fista[j] = coef->fdata[j] + (k - 2.)/(k+1.) * (coef->fdata[j] - temp_fista[j]);

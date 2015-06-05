@@ -1,0 +1,41 @@
+/* [wxMaxima batch file version 1] [ DO NOT EDIT BY HAND! ]*/
+/* [ Created with wxMaxima version 14.12.1 ] */
+
+/* [wxMaxima: input   start ] */
+diffw(q, e, vs) := ratsimp(subst(map(reverse, q), map(lambda([v], diff(subst(q, e), v)), vs)))$
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq1 : [g_x = r-x, g_y = b-x]$
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+tv : sqrt(g_x^2 + g_y^2)$
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+diffw(eq1, tv, [x, r, b]);
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq2 : [g_xx = (r-x)-(x-l), g_yy = (b-x)-(x-u), g_xy = (r-x)-(rb-b), g_yx = (r-x)-(rb-b)]$
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+tvg : sqrt(g_xx^2 + g_yy^2+ g_xy^2 + g_yx^2)$
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+diffw(eq2, tvg, [x, l, r, u, b, rb]);
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq3 : [g_xx = (r-x)-(x-l), g_yy = (b-x)-(x-u), g_xy = (r-x)-(ru-u), g_yx = (b-x) - (lb-l)];
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+diffw(eq3, tvg, [x, l, r, u, b, ru, lb]);
+/* [wxMaxima: input   end   ] */
+
+/* Maxima can't load/batch files which end with a comment! */
+"Created with wxMaxima"$

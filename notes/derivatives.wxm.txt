@@ -1,0 +1,13 @@
+(%i1) diffw(q, e, vs) := ratsimp(subst(map(reverse, q), map(lambda([v], diff(subst(q, e), v)), vs)))$
+(%i2) eq1 : [g_x = r-x, g_y = b-x]$
+(%i3) tv : sqrt(g_x^2 + g_y^2)$
+(%i4) diffw(eq1, tv, [x, r, b]);
+(%o4) [-(g_y+g_x)/sqrt(g_y^2+g_x^2),g_x/sqrt(g_y^2+g_x^2),g_y/sqrt(g_y^2+g_x^2)]
+(%i5) eq2 : [g_xx = (r-x)-(x-l), g_yy = (b-x)-(x-u), g_xy = (r-x)-(rb-b), g_yx = (r-x)-(rb-b)]$
+(%i6) tvg : sqrt(g_xx^2 + g_yy^2+ g_xy^2 + g_yx^2)$
+(%i7) diffw(eq2, tvg, [x, l, r, u, b, rb]);
+(%o7) [-(2*g_yy+2*g_xy+2*g_xx)/sqrt(g_yy^2+2*g_xy^2+g_xx^2),g_xx/sqrt(g_yy^2+2*g_xy^2+g_xx^2),(2*g_xy+g_xx)/sqrt(g_yy^2+2*g_xy^2+g_xx^2),g_yy/sqrt(g_yy^2+2*g_xy^2+g_xx^2),(g_yy+2*g_xy)/sqrt(g_yy^2+2*g_xy^2+g_xx^2),-(2*g_xy)/sqrt(g_yy^2+2*g_xy^2+g_xx^2)]
+(%i8) eq3 : [g_xx = (r-x)-(x-l), g_yy = (b-x)-(x-u), g_xy = (r-x)-(ru-u), g_yx = (b-x) - (lb-l)];
+(%o8) [g_xx=-2*x+r+l,g_yy=-2*x+u+b,g_xy=-x+u-ru+r,g_yx=-x-lb+l+b]
+(%i9) diffw(eq3, tvg, [x, l, r, u, b, ru, lb]);
+(%o9) [-(2*g_yy+g_yx+g_xy+2*g_xx)/sqrt(g_yy^2+g_yx^2+g_xy^2+g_xx^2),(g_yx+g_xx)/sqrt(g_yy^2+g_yx^2+g_xy^2+g_xx^2),(g_xy+g_xx)/sqrt(g_yy^2+g_yx^2+g_xy^2+g_xx^2),(g_yy+g_xy)/sqrt(g_yy^2+g_yx^2+g_xy^2+g_xx^2),(g_yy+g_yx)/sqrt(g_yy^2+g_yx^2+g_xy^2+g_xx^2),-g_xy/sqrt(g_yy^2+g_yx^2+g_xy^2+g_xx^2),-g_yx/sqrt(g_yy^2+g_yx^2+g_xy^2+g_xx^2)]

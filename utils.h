@@ -26,7 +26,7 @@ void stop_timer(clock_t t, const char *n);
 #if defined(NDEBUG) && defined(BUILTIN_ASSUME_ALIGNED)
   #define ASSUME_ALIGNED(x) x = __builtin_assume_aligned(x, 16)
 #else
-  #define ASSUME_ALIGNED(x) ASSUME((((uintptr_t)p) & 15) == 0)
+  #define ASSUME_ALIGNED(x) ASSUME((((uintptr_t)x) & 15) == 0)
 #endif
 
 #define START_TIMER(n) clock_t macro_timer_##n = start_timer(#n);

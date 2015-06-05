@@ -32,6 +32,6 @@ clock_t start_timer(const char *name) {
 
 void stop_timer(clock_t t, const char *n) {
         clock_t diff = clock() - t;
-        int msec = diff * 1000 / CLOCKS_PER_SEC;
-        printf("%s: %d ms\n", n, msec);
+        unsigned msec = diff * 1000 / CLOCKS_PER_SEC;
+        printf("%s: %u ms\n", n, msec);
 }

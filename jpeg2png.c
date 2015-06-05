@@ -16,7 +16,7 @@
 #include "logger.h"
 
 static const float default_weight = 0.3;
-static const int default_iterations = 50;
+static const unsigned default_iterations = 50;
 
 noreturn static void usage() {
         printf(
@@ -65,9 +65,9 @@ int main(int argc, const char **argv) {
                         die("invalid weight");
                 }
         }
-        int iterations[3] = {default_iterations, default_iterations, default_iterations};
+        unsigned iterations[3] = {default_iterations, default_iterations, default_iterations};
         if(gopt_arg(options, 'i', &arg_string)) {
-                int n = sscanf(arg_string, "%d,%d,%d", &iterations[0], &iterations[1], &iterations[2]);
+                int n = sscanf(arg_string, "%u,%u,%u", &iterations[0], &iterations[1], &iterations[2]);
                 if(n == 3) {
                         // ok
                 } else if(n == 1) {
@@ -95,12 +95,12 @@ int main(int argc, const char **argv) {
         read_jpeg(in, &jpeg);
         fclose(in);
 
-        for(int c = 0; c < 3; c++) {
+        for(unsigned c = 0; c < 3; c++) {
                 struct coef *coef = &jpeg.coefs[c];
                 decode_coefficients(coef, jpeg.quant_table[c]);
         }
 
-        for(int i = 0; i < 3; i++) {
+        for(unsigned i = 0; i < 3; i++) {
                 struct coef *coef = &jpeg.coefs[i];
                 float *temp = fftwf_alloc_real(coef->h * coef->w);
                 if(!temp) { die("allocation error"); }
@@ -114,7 +114,7 @@ int main(int argc, const char **argv) {
         START_TIMER(computing);
         struct logger log;
         logger_start(&log, csv_log);
-        for(int i = 0; i < 3; i++) {
+        for(unsigned i = 0; i < 3; i++) {
                 log.channel = i;
                 START_TIMER(compute_1);
                 struct coef *coef = &jpeg.coefs[i];
@@ -128,12 +128,12 @@ int main(int argc, const char **argv) {
         }
 
         struct coef *coef = &jpeg.coefs[0];
-        for(int i = 0; i < coef->h * coef->w; i++) {
+        for(unsigned i = 0; i < coef->h * coef->w; i++) {
                 coef->fdata[i] += 128.;
         }
 
         START_TIMER(upsampling);
-        for(int i = 0; i < 3; i++) {
+        for(unsigned i = 0; i < 3; i++) {
                 upsample(&jpeg.coefs[i], jpeg.w, jpeg.h);
         }
         STOP_TIMER(upsampling);
@@ -141,7 +141,7 @@ int main(int argc, const char **argv) {
         write_png(out, jpeg.w, jpeg.h, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);
         fclose(out);
 
-        for(int i = 0; i < 3; i++) {
+        for(unsigned i = 0; i < 3; i++) {
                 fftwf_free(jpeg.coefs[i].fdata);
                 free(jpeg.coefs[i].data);
         }

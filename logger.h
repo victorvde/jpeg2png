@@ -5,8 +5,8 @@
 
 struct logger {
         FILE *f;
-        int channel;
-        int iteration;
+        unsigned channel;
+        unsigned iteration;
 };
 
 void logger_start(struct logger *log, FILE *csv_log);

@@ -25,7 +25,7 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
         if(d.num_components != 3) { die("only 3 component jpegs are supported"); }
 
         for(int c = 0; c < d.num_components; c++) {
-                int i = d.comp_info[c].quant_tbl_no;
+                unsigned i = d.comp_info[c].quant_tbl_no;
                 JQUANT_TBL *t = d.quant_tbl_ptrs[i];
                 memcpy(jpeg->quant_table[c], t->quantval, sizeof(uint16_t) * 64);
         }
@@ -33,16 +33,16 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
         jvirt_barray_ptr *coefs = jpeg_read_coefficients(&d);
         for(int c = 0; c < d.num_components; c++) {
                 jpeg_component_info *i = &d.comp_info[c];
-                int h = i->height_in_blocks * 8;
-                int w = i->width_in_blocks * 8;
+                unsigned h = i->height_in_blocks * 8;
+                unsigned w = i->width_in_blocks * 8;
                 int16_t *data = malloc(w * h * sizeof(int16_t));
                 jpeg->coefs[c].w = w;
                 jpeg->coefs[c].h = h;
                 jpeg->coefs[c].data = data;
                 if(!data) { die("could not allocate memory for coefs"); }
-                for(int y = 0; y < h / 8; y++) {
+                for(unsigned y = 0; y < h / 8; y++) {
                         JBLOCKARRAY b = d.mem->access_virt_barray((void*)&d, coefs[c], y, 1, false);
-                        for(int x = 0; x < w / 8; x++) {
+                        for(unsigned x = 0; x < w / 8; x++) {
                                 memcpy(data, b[0][x], 64 * sizeof(int16_t));
                                 data += 64;
                         }
@@ -54,13 +54,13 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
 void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
         coef->fdata = fftwf_alloc_real(coef->h * coef->w);
         if(!coef->fdata) { die("allocation error"); }
-        int blocks = (coef->h / 8) * (coef->w / 8);
-        for(int i = 0; i < blocks; i++) {
-                for(int j = 0; j < 64; j++) {
+        unsigned blocks = (coef->h / 8) * (coef->w / 8);
+        for(unsigned i = 0; i < blocks; i++) {
+                for(unsigned j = 0; j < 64; j++) {
                         coef->fdata[i*64+j] = coef->data[i*64+j] * quant_table[j];
                 }
-                for(int v = 0; v < 8; v++) {
-                        for(int u = 0; u < 8; u++) {
+                for(unsigned v = 0; v < 8; v++) {
+                        for(unsigned u = 0; u < 8; u++) {
                                 coef->fdata[i*64 + v*8+u] /= a(u) * a(v);
                         }
                 }
@@ -72,7 +72,7 @@ void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
                 (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
         fftwf_execute(p);
         fftwf_destroy_plan(p);
-        for(int i = 0; i < blocks * 64; i++) {
+        for(unsigned i = 0; i < blocks * 64; i++) {
                 coef->fdata[i] /= 16.;
         }
 }

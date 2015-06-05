@@ -7,8 +7,8 @@
 #include "jpeg2png.h"
 
 struct jpeg {
-        int h;
-        int w;
+        unsigned h;
+        unsigned w;
         uint16_t quant_table[3][64];
         struct coef coefs[3];
 };

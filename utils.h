@@ -20,10 +20,8 @@ void stop_timer(clock_t t, const char *n);
 #define START_TIMER(n) clock_t macro_timer_##n = start_timer(#n);
 #define STOP_TIMER(n) stop_timer(macro_timer_##n, #n);
 
-inline void check(int x, int y, int w, int h) {
-        assert(0 <= x);
+inline void check(unsigned x, unsigned y, unsigned w, unsigned h) {
         assert(x < w);
-        assert(0 <= y);
         assert(y < h);
         (void) x;
         (void) y;
@@ -31,12 +29,12 @@ inline void check(int x, int y, int w, int h) {
         (void) h;
 }
 
-inline float *p(float *in, int x, int y, int w, int h) {
+inline float *p(float *in, unsigned x, unsigned y, unsigned w, unsigned h) {
         check(x, y, w, h);
         return &in[y * w + x];
 }
 
-inline float a(int n) {
+inline float a(unsigned n) {
         if(n == 0) {
                 return 1./sqrt(2.);
         } else {

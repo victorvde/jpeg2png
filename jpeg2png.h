@@ -4,8 +4,8 @@
 #include <stdint.h>
 
 struct coef {
-        int h;
-        int w;
+        unsigned h;
+        unsigned w;
         int16_t *data;
         float *fdata;
 };

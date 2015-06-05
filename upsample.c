@@ -1,5 +1,3 @@
-#include <assert.h>
-
 #include <fftw3.h>
 
 #include "jpeg2png.h"
@@ -12,7 +10,7 @@ static void upsample_y(struct coef *coef, unsigned jpeg_w, unsigned jpeg_h) {
         unsigned h = coef->h;
 
         unsigned jpeg_blocks_h = (jpeg_h + 7) / 8;
-        assert(h / 8 == (jpeg_blocks_h + 1) / 2);
+        ASSUME(h / 8 == (jpeg_blocks_h + 1) / 2);
         (void) jpeg_blocks_h;
 
         unsigned new_h = h * 2;
@@ -43,7 +41,7 @@ static void upsample_x(struct coef *coef, unsigned jpeg_w, unsigned jpeg_h) {
         unsigned h = coef->h;
 
         unsigned jpeg_blocks_w = (jpeg_w + 7) / 8;
-        assert(w / 8 == (jpeg_blocks_w + 1) / 2);
+        ASSUME(w / 8 == (jpeg_blocks_w + 1) / 2);
         (void) jpeg_blocks_w;
 
         unsigned new_w = w * 2;

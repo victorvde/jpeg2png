@@ -6,6 +6,7 @@
 #include <time.h>
 #include <math.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 noreturn void die(const char *msg, ...);
 noreturn void die_perror(const char *msg, ...);
@@ -16,13 +17,23 @@ void stop_timer(clock_t t, const char *n);
 #define MAX(a, b)  (((a) > (b)) ? (a) : (b))
 #define CLAMP(x, low, high) (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 #define DUMP(v, f) do { printf( #v " = " f "\n", v); } while(false)
+#ifdef NDEBUG
+  #ifdef BUILTIN_UNREACHABLE
+    #define ASSUME(x) do { if(!(x)) { __builtin_unreachable(); } } while(false)
+    // #define ASSUME(x) (void)0
+  #else
+    #define ASSUME(x) do { if(!(x)) { abort(); } } while(false)
+  #endif
+#else
+  #define ASSUME(x) assert(x)
+#endif
 
 #define START_TIMER(n) clock_t macro_timer_##n = start_timer(#n);
 #define STOP_TIMER(n) stop_timer(macro_timer_##n, #n);
 
 inline void check(unsigned x, unsigned y, unsigned w, unsigned h) {
-        assert(x < w);
-        assert(y < h);
+        ASSUME(x < w);
+        ASSUME(y < h);
         (void) x;
         (void) y;
         (void) w;

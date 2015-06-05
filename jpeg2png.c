@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <stdnoreturn.h>
 
-#include <fftw3.h>
-
 #include "gopt/gopt.h"
 
 #include "jpeg2png.h"
@@ -102,12 +100,12 @@ int main(int argc, const char **argv) {
 
         for(unsigned i = 0; i < 3; i++) {
                 struct coef *coef = &jpeg.coefs[i];
-                float *temp = fftwf_alloc_real(coef->h * coef->w);
+                float *temp = alloc_real(coef->h * coef->w);
                 if(!temp) { die("allocation error"); }
 
                 unbox(coef->fdata, temp, coef->w, coef->h);
 
-                fftwf_free(coef->fdata);
+                free(coef->fdata);
                 coef->fdata = temp;
         }
 
@@ -142,7 +140,7 @@ int main(int argc, const char **argv) {
         fclose(out);
 
         for(unsigned i = 0; i < 3; i++) {
-                fftwf_free(jpeg.coefs[i].fdata);
+                free(jpeg.coefs[i].fdata);
                 free(jpeg.coefs[i].data);
         }
 }

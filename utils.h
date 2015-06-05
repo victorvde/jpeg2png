@@ -58,4 +58,8 @@ inline float sqr(float x) {
         return x * x;
 }
 
+inline void *alloc_real(size_t n) {
+        return aligned_alloc(16, n * sizeof(float));
+}
+
 #endif

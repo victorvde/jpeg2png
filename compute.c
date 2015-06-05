@@ -117,9 +117,9 @@ static void compute_projection_init(struct coef *coef, uint16_t quant_table[64],
         unsigned w = coef->w;
         unsigned h = coef->h;
 
-        float *q_max = fftwf_alloc_real(h * w);
+        float *q_max = alloc_real(h * w);
         if(!q_max) { die("allocation error"); }
-        float *q_min = fftwf_alloc_real(h * w);
+        float *q_min = alloc_real(h * w);
         if(!q_min) { die("allocation error"); }
         unsigned blocks = (h / 8) * (w / 8);
 
@@ -142,7 +142,7 @@ static void compute_projection_init(struct coef *coef, uint16_t quant_table[64],
         aux->q_min = q_min;
         aux->q_max = q_max;
 
-        float *temp = fftwf_alloc_real(h * w);
+        float *temp = alloc_real(h * w);
         if(!temp) { die("allocation error"); }
 
         aux->temp = temp;
@@ -208,14 +208,14 @@ void compute(struct coef *coef, struct logger *log, uint16_t quant_table[64], fl
         unsigned h = coef->h;
         unsigned w = coef->w;
 
-        float *temp_x = fftwf_alloc_real(h * w);
+        float *temp_x = alloc_real(h * w);
         if(!temp_x) { die("allocation error"); }
-        float *temp_y = fftwf_alloc_real(h * w);
+        float *temp_y = alloc_real(h * w);
         if(!temp_y) { die("allocation error"); }
-        float *temp_gradient = fftwf_alloc_real(h * w);
+        float *temp_gradient = alloc_real(h * w);
         if(!temp_gradient) { die("allocation error"); }
 
-        float *temp_fista = fftwf_alloc_real(h * w);
+        float *temp_fista = alloc_real(h * w);
         if(!temp_fista) { die("allocation error"); }
         memcpy(temp_fista, coef->fdata, sizeof(float) * w * h);
 
@@ -223,6 +223,8 @@ void compute(struct coef *coef, struct logger *log, uint16_t quant_table[64], fl
         for(unsigned i = 0; i < iterations; i++) {
                 log->iteration = i;
 
+                ASSUME_ALIGNED(temp_fista);
+                ASSUME_ALIGNED(coef->fdata);
                 float k = i;
                 for(unsigned j = 0; j < w * h; j++) {
                         temp_fista[j] = coef->fdata[j] + (k - 2.)/(k+1.) * (coef->fdata[j] - temp_fista[j]);

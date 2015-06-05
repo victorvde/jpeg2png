@@ -1,5 +1,3 @@
-#include <fftw3.h>
-
 #include "jpeg2png.h"
 #include "utils.h"
 
@@ -14,7 +12,7 @@ static void upsample_y(struct coef *coef, unsigned jpeg_w, unsigned jpeg_h) {
         (void) jpeg_blocks_h;
 
         unsigned new_h = h * 2;
-        float *new = fftwf_alloc_real(w * new_h);
+        float *new = alloc_real(w * new_h);
         for(unsigned y = 0; y < new_h; y++) {
                 for(unsigned x = 0; x < w; x++) {
                         if(y == 0) {
@@ -29,7 +27,7 @@ static void upsample_y(struct coef *coef, unsigned jpeg_w, unsigned jpeg_h) {
                         }
                 }
         }
-        fftwf_free(coef->fdata);
+        free(coef->fdata);
         coef->fdata = new;
         coef->h = new_h;
 }
@@ -45,7 +43,7 @@ static void upsample_x(struct coef *coef, unsigned jpeg_w, unsigned jpeg_h) {
         (void) jpeg_blocks_w;
 
         unsigned new_w = w * 2;
-        float *new = fftwf_alloc_real(new_w * h);
+        float *new = alloc_real(new_w * h);
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < new_w; x++) {
                         if(x == 0) {
@@ -60,7 +58,7 @@ static void upsample_x(struct coef *coef, unsigned jpeg_w, unsigned jpeg_h) {
                         }
                 }
         }
-        fftwf_free(coef->fdata);
+        free(coef->fdata);
         coef->fdata = new;
         coef->w = new_w;
 }

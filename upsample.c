@@ -27,7 +27,7 @@ static void upsample_y(struct coef *coef, unsigned jpeg_w, unsigned jpeg_h) {
                         }
                 }
         }
-        free(coef->fdata);
+        free_real(coef->fdata);
         coef->fdata = new;
         coef->h = new_h;
 }
@@ -58,7 +58,7 @@ static void upsample_x(struct coef *coef, unsigned jpeg_w, unsigned jpeg_h) {
                         }
                 }
         }
-        free(coef->fdata);
+        free_real(coef->fdata);
         coef->fdata = new;
         coef->w = new_w;
 }

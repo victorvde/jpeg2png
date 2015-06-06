@@ -105,7 +105,7 @@ int main(int argc, const char **argv) {
 
                 unbox(coef->fdata, temp, coef->w, coef->h);
 
-                free(coef->fdata);
+                free_real(coef->fdata);
                 coef->fdata = temp;
         }
 
@@ -140,7 +140,7 @@ int main(int argc, const char **argv) {
         fclose(out);
 
         for(unsigned i = 0; i < 3; i++) {
-                free(jpeg.coefs[i].fdata);
+                free_real(jpeg.coefs[i].fdata);
                 free(jpeg.coefs[i].data);
         }
 }

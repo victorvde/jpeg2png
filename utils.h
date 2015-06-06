@@ -59,8 +59,20 @@ inline float sqr(float x) {
         return x * x;
 }
 
-inline void *alloc_real(size_t n) {
+inline float *alloc_real(size_t n) {
+#if defined(_WIN32)
+        return _aligned_malloc(n * sizeof(float), 16);
+#else
         return aligned_alloc(16, n * sizeof(float));
+#endif
+}
+
+inline void free_real(float *p) {
+#ifdef _WIN32
+        _aligned_free(p);
+#else
+        free(p);
+#endif
 }
 
 #endif

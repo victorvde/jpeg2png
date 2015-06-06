@@ -112,6 +112,9 @@ int main(int argc, const char **argv) {
         START_TIMER(computing);
         struct logger log;
         logger_start(&log, csv_log);
+#ifdef USE_OPENMP
+        #pragma omp parallel for schedule(dynamic) firstprivate(log)
+#endif
         for(unsigned i = 0; i < 3; i++) {
                 log.channel = i;
                 START_TIMER(compute_1);

@@ -8,9 +8,8 @@
 #include "box.h"
 #include "logger.h"
 
-
-static float compute_step_tv(unsigned w, unsigned h, float *in, float *objective_gradient, float *in_x, float *in_y) {
-        float tv = 0.;
+static double compute_step_tv(unsigned w, unsigned h, float *in, float *objective_gradient, float *in_x, float *in_y) {
+        double tv = 0.;
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
                         // forward gradient x
@@ -37,8 +36,8 @@ static float compute_step_tv(unsigned w, unsigned h, float *in, float *objective
         return tv;
 }
 
-static float compute_step_tv2(unsigned w, unsigned h, float *objective_gradient, float *in_x, float *in_y, float alpha) {
-        float tv2 = 0.;
+static double compute_step_tv2(unsigned w, unsigned h, float *objective_gradient, float *in_x, float *in_y, float alpha) {
+        double tv2 = 0.;
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
                         // backward x
@@ -79,15 +78,15 @@ static float compute_step_tv2(unsigned w, unsigned h, float *objective_gradient,
         return tv2;
 }
 
-static float compute_step(unsigned w, unsigned h, float *in, float *out, float step_size, float weight, float *objective_gradient, float *in_x, float *in_y, struct logger *log) {
+static double compute_step(unsigned w, unsigned h, float *in, float *out, float step_size, float weight, float *objective_gradient, float *in_x, float *in_y, struct logger *log) {
         float alpha = weight / sqrt(4. / 2.);
         for(unsigned i = 0; i < h * w; i++) {
                 objective_gradient[i] = 0.;
         }
 
-        float tv = compute_step_tv(w, h, in, objective_gradient, in_x, in_y);
+        double tv = compute_step_tv(w, h, in, objective_gradient, in_x, in_y);
 
-        float tv2 = alpha == 0. ? 0. : compute_step_tv2(w, h, objective_gradient, in_x, in_y, alpha);
+        double tv2 = alpha == 0. ? 0. : compute_step_tv2(w, h, objective_gradient, in_x, in_y, alpha);
 
         float norm = 0.;
         for(unsigned i = 0; i < h * w; i++) {
@@ -99,7 +98,7 @@ static float compute_step(unsigned w, unsigned h, float *in, float *out, float s
                 out[i] = in[i] - step_size * (objective_gradient[i] /  norm);
         }
 
-        float objective = (tv + alpha * tv2) / (alpha + 1.);
+        double objective = (tv + alpha * tv2) / (alpha + 1.);
         logger_log(log, objective, tv, tv2);
 
         return objective;

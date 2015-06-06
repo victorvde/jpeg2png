@@ -13,7 +13,7 @@ void logger_start(struct logger *log, FILE *csv_log) {
         }
 }
 
-void logger_log(struct logger *log, float objective, float tv, float tv2) {
+void logger_log(struct logger *log, double objective, double tv, double tv2) {
         if(log->f) {
                 if(fprintf(log->f, "%d,%d,%f,%f,%f\n", log->channel, log->iteration, objective, tv, tv2) < 0)
                 {

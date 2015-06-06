@@ -8,7 +8,14 @@
 #include "box.h"
 #include "logger.h"
 
-static double compute_step_tv(unsigned w, unsigned h, float *in, float *objective_gradient, float *in_x, float *in_y) {
+#ifdef USE_SIMD
+  #include "compute_simd_step.c"
+  #define compute_step_tv compute_step_tv_simd
+#else
+  #define compute_step_tv compute_step_tv_c
+#endif
+
+POSSIBLY_UNUSED static double compute_step_tv_c(unsigned w, unsigned h, float *in, float *objective_gradient, float *in_x, float *in_y) {
         double tv = 0.;
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
@@ -34,6 +41,21 @@ static double compute_step_tv(unsigned w, unsigned h, float *in, float *objectiv
                 }
         }
         return tv;
+}
+
+POSSIBLY_UNUSED static void verify_compute_step_tv(unsigned w, unsigned h, double tv, float *in, float *objective_gradient, float *in_x, float *in_y) {
+        puts("verify");
+        float *objective_gradient_ = alloc_real(w*h);
+        float *in_x_ = alloc_real(w*h);
+        float *in_y_ = alloc_real(w*h);
+        double tv_c = compute_step_tv_c(w, h, in, objective_gradient_, in_x_, in_y_);
+        compare("in_x", w, h, in_x_, in_x);
+        compare("in_y", w, h, in_y_, in_y);
+        compare("objective_gradient", w, h, objective_gradient_, objective_gradient);
+        printf("simd %f, original %f\n", tv, tv_c);
+        free(objective_gradient_);
+        free(in_y_);
+        free(in_x_);
 }
 
 static double compute_step_tv2(unsigned w, unsigned h, float *objective_gradient, float *in_x, float *in_y, float alpha) {
@@ -85,6 +107,9 @@ static double compute_step(unsigned w, unsigned h, float *in, float *out, float 
         }
 
         double tv = compute_step_tv(w, h, in, objective_gradient, in_x, in_y);
+#ifdef SIMD_VERIFY
+        verify_compute_step_tv(w, h, tv, in, objective_gradient, in_x, in_y);
+#endif
 
         double tv2 = alpha == 0. ? 0. : compute_step_tv2(w, h, objective_gradient, in_x, in_y, alpha);
 

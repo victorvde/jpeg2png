@@ -1,9 +1,13 @@
 CC:=gcc
-CFLAGS:=-std=c11 -pedantic -Ofast -msse2 -mfpmath=sse -DNDEBUG -DBUILTIN_UNREACHABLE -DBUILTIN_ASSUME_ALIGNED
+CFLAGS:=-std=c11 -pedantic -msse2 -mfpmath=sse
 WARN_FLAGS:=-Wall -Wextra -Winline
-# CFLAGS:=-std=c11 -pedantic -Og -g
+CFLAGS+=-DBUILTIN_UNREACHABLE -DBUILTIN_ASSUME_ALIGNED -DATTRIBUTE_UNUSED
+CFLAGS+= -DUSE_SIMD # -DSIMD_VERIFY
+CFLAGS+= -O3 -DNDEBUG
+# CFLAGS+=-Og -DNDEBUG
+# CFLAGS+= -save-temps -masm=intel -fverbose-asm
 LFLAGS:= -s
-BFLAGS:=
+BFLAGS:= #-pg -g
 LIBS:=-ljpeg -lpng -lfftw3f -lm
 OBJS:=jpeg2png.o utils.o jpeg.o png.o box.o upsample.o compute.o logger.o gopt/gopt.o
 

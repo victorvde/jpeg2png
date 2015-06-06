@@ -55,14 +55,6 @@ inline float *p(float *in, unsigned x, unsigned y, unsigned w, unsigned h) {
         return &in[y * w + x];
 }
 
-inline float a(unsigned n) {
-        if(n == 0) {
-                return 1./sqrt(2.);
-        } else {
-                return 1.;
-        }
-}
-
 inline float sqr(float x) {
         return x * x;
 }

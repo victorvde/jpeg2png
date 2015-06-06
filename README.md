@@ -8,7 +8,7 @@ jpeg2png is smarter and fills the missing information to create the smoothest po
 
 ## Availability
 
-jpeg2png is written in portable C, specfically C11. It relies on libjpeg, libpng and libfftw3.
+jpeg2png is written in portable C, specfically C11. It relies on libjpeg and libpng.
 You can compile the executable using make and gcc.
 jpeg2png is licensed GPLv3+.
 

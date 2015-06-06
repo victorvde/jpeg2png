@@ -8,8 +8,8 @@ CFLAGS+= -O3 -DNDEBUG
 # CFLAGS+= -save-temps -masm=intel -fverbose-asm
 LFLAGS:= -s
 BFLAGS:= #-pg -g
-LIBS:=-ljpeg -lpng -lfftw3f -lm
-OBJS:=jpeg2png.o utils.o jpeg.o png.o box.o upsample.o compute.o logger.o gopt/gopt.o
+LIBS:=-ljpeg -lpng -lm
+OBJS:=jpeg2png.o utils.o jpeg.o png.o box.o upsample.o compute.o logger.o gopt/gopt.o ooura/dct.o
 
 jpeg2png: $(OBJS)
 	$(CC) $^ -o $@ $(LFLAGS) $(BFLAGS) $(LIBS)

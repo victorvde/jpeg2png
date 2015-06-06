@@ -1,12 +1,13 @@
 #include <stdint.h>
 #include <string.h>
-#include <fftw3.h>
 
 #include "jpeg2png.h"
 #include "compute.h"
 #include "utils.h"
 #include "box.h"
 #include "logger.h"
+
+#include "ooura/dct.h"
 
 #ifdef USE_SIMD
   #include "compute_simd_step.c"
@@ -133,8 +134,6 @@ struct compute_projection_aux {
         float *q_min;
         float *q_max;
         float *temp;
-        fftwf_plan dct;
-        fftwf_plan idct;
 };
 
 static void compute_projection_init(unsigned w, unsigned h, int16_t *data, uint16_t quant_table[64], struct compute_projection_aux *aux) {
@@ -151,15 +150,6 @@ static void compute_projection_init(unsigned w, unsigned h, int16_t *data, uint1
                 }
         }
 
-        for(unsigned i = 0; i < blocks; i++) {
-                for(unsigned v = 0; v < 8; v++) {
-                        for(unsigned u = 0; u < 8; u++) {
-                                q_max[i*64 + v*8+u] /= a(u) * a(v);
-                                q_min[i*64 + v*8+u] /= a(u) * a(v);
-                        }
-                }
-        }
-
         aux->q_min = q_min;
         aux->q_max = q_max;
 
@@ -167,27 +157,9 @@ static void compute_projection_init(unsigned w, unsigned h, int16_t *data, uint1
         if(!temp) { die("allocation error"); }
 
         aux->temp = temp;
-
-        fftwf_plan dct = fftwf_plan_many_r2r(
-                2, (int[]){8, 8}, blocks,
-                temp, (int[]){8, 8}, 1, 64,
-                temp, (int[]){8, 8}, 1, 64,
-                (void*)(int[]){FFTW_REDFT10, FFTW_REDFT10}, FFTW_ESTIMATE);
-
-        aux->dct = dct;
-
-        fftwf_plan idct = fftwf_plan_many_r2r(
-                2, (int[]){8, 8}, blocks,
-                temp, (int[]){8, 8}, 1, 64,
-                temp, (int[]){8, 8}, 1, 64,
-                (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
-
-        aux->idct = idct;
 }
 
 static void compute_projection_destroy(struct compute_projection_aux *aux) {
-        fftwf_destroy_plan(aux->idct);
-        fftwf_destroy_plan(aux->dct);
         free(aux->temp);
         free(aux->q_min);
         free(aux->q_max);
@@ -200,18 +172,16 @@ static void compute_projection(unsigned w, unsigned h, float *fdata, struct comp
 
         box(fdata, temp, w, h);
 
-        fftwf_execute(aux->dct);
-        for(unsigned i = 0; i < h * w; i++) {
-                temp[i] /= 16.;
+        for(unsigned i = 0; i < blocks; i++) {
+                dct8x8s(&temp[i*64]);
         }
 
         for(unsigned i = 0; i < h * w; i++) {
                 temp[i] = fmin(fmax(temp[i], aux->q_min[i]), aux->q_max[i]);
         }
 
-        fftwf_execute(aux->idct);
-        for(unsigned i = 0; i < blocks * 64; i++) {
-                temp[i] /= 16.;
+        for(unsigned i = 0; i < blocks; i++) {
+                idct8x8s(&temp[i*64]);
         }
 
         unbox(temp, fdata, w, h);

@@ -5,10 +5,10 @@
 #include <string.h>
 
 #include <jpeglib.h>
-#include <fftw3.h>
 
 #include "jpeg.h"
 #include "utils.h"
+#include "ooura/dct.h"
 
 void read_jpeg(FILE *in, struct jpeg *jpeg) {
         struct jpeg_decompress_struct d;
@@ -58,19 +58,8 @@ void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
                 for(unsigned j = 0; j < 64; j++) {
                         coef->fdata[i*64+j] = coef->data[i*64+j] * quant_table[j];
                 }
-                for(unsigned v = 0; v < 8; v++) {
-                        for(unsigned u = 0; u < 8; u++) {
-                                coef->fdata[i*64 + v*8+u] /= a(u) * a(v);
-                        }
-                }
+                idct8x8s(&(coef->fdata[i*64]));
         }
-        fftwf_plan p = fftwf_plan_many_r2r(
-                2, (int[]){8, 8}, blocks,
-                coef->fdata, (int[]){8, 8}, 1, 64,
-                coef->fdata, (int[]){8, 8}, 1, 64,
-                (void*)(int[]){FFTW_REDFT01, FFTW_REDFT01}, FFTW_ESTIMATE);
-        fftwf_execute(p);
-        fftwf_destroy_plan(p);
         for(unsigned i = 0; i < blocks * 64; i++) {
                 coef->fdata[i] /= 16.;
         }

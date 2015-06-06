@@ -60,7 +60,4 @@ void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
                 }
                 idct8x8s(&(coef->fdata[i*64]));
         }
-        for(unsigned i = 0; i < blocks * 64; i++) {
-                coef->fdata[i] /= 16.;
-        }
 }

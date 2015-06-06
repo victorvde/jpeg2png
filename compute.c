@@ -177,7 +177,7 @@ static void compute_projection(unsigned w, unsigned h, float *fdata, struct comp
         }
 
         for(unsigned i = 0; i < h * w; i++) {
-                temp[i] = fmin(fmax(temp[i], aux->q_min[i]), aux->q_max[i]);
+                temp[i] = CLAMP(temp[i], aux->q_min[i], aux->q_max[i]);
         }
 
         for(unsigned i = 0; i < blocks; i++) {

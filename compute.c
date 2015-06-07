@@ -187,7 +187,7 @@ static void compute_projection(unsigned w, unsigned h, float *fdata, struct comp
         unbox(temp, fdata, w, h);
 }
 
-void compute(struct coef *coef, struct logger *log, uint16_t quant_table[64], float weight, unsigned iterations) {
+void compute(struct coef *coef, struct logger *log, struct progressbar *pb, uint16_t quant_table[64], float weight, unsigned iterations) {
         unsigned h = coef->h;
         unsigned w = coef->w;
         float *fdata = coef->fdata;
@@ -222,6 +222,13 @@ void compute(struct coef *coef, struct logger *log, uint16_t quant_table[64], fl
                 float *t = fdata;
                 fdata = temp_fista;
                 temp_fista = t;
+
+                if(pb) {
+#ifdef USE_OPENMP
+    #pragma omp critical(progressbar)
+#endif
+                        progressbar_inc(pb);
+                }
         }
 
         coef->fdata = fdata;

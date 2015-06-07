@@ -12,7 +12,7 @@ LFLAGS+=-s
 # BFLAGS+=-pg -g
 BFLAGS+=-fopenmp
 LIBS:=-ljpeg -lpng -lm -lz
-OBJS:=jpeg2png.o utils.o jpeg.o png.o box.o upsample.o compute.o logger.o gopt/gopt.o ooura/dct.o
+OBJS:=jpeg2png.o utils.o jpeg.o png.o box.o upsample.o compute.o logger.o progressbar.o gopt/gopt.o ooura/dct.o
 
 jpeg2png$(EXE): $(OBJS)
 	$(CC) $^ -o $@ $(LFLAGS) $(BFLAGS) $(LIBS)

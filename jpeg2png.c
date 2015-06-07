@@ -12,13 +12,14 @@
 #include "upsample.h"
 #include "compute.h"
 #include "logger.h"
+#include "progressbar.h"
 
 static const float default_weight = 0.3;
 static const unsigned default_iterations = 50;
 
 noreturn static void usage() {
         printf(
-                "usage: jpeg2png in.jpg out.png [-w weight] [-i iterations] [-c csv_log]\n"
+                "usage: jpeg2png in.jpg out.png [-w weight] [-i iterations] [-q] [-c csv_log]\n"
                 "\n"
                 "-w weight[,weight_cb,weight_cr]\n"
                 "--second-order-weight weight[,weight_cb,weight_cr]\n"
@@ -36,6 +37,10 @@ noreturn static void usage() {
                 "\titerations for the chroma channels default to the luma iterations\n"
                 "\tdefault value: %d\n"
                 "\n"
+                "-q\n"
+                "--quiet\n"
+                "don't show the progress bar\n"
+                "\n"
                 "-c csv_log\n"
                 "--csv_log csv_log\n"
                 "\tcsv_log is a file name for the optimization log\n"
@@ -48,6 +53,7 @@ int main(int argc, const char **argv) {
         void *options = gopt_sort(&argc, argv, gopt_start(
                 gopt_option('h', GOPT_NOARG, gopt_shorts( 'h', '?' ), gopt_longs("help")),
                 gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs("csv-log")),
+                gopt_option('q', GOPT_NOARG, gopt_shorts('q'), gopt_longs("quiet")),
                 gopt_option('i', GOPT_ARG, gopt_shorts('i'), gopt_longs("iterations")),
                 gopt_option('w', GOPT_ARG, gopt_shorts('w'), gopt_longs("second-order-weight"))));
         if(argc != 3 || gopt(options, 'h')) {
@@ -87,6 +93,8 @@ int main(int argc, const char **argv) {
                 if(!csv_log) { die_perror("could not open csv log `%s`", csv_log); }
         }
 
+        bool quiet = gopt(options, 'q');
+
         gopt_free(options);
 
         struct jpeg jpeg;
@@ -109,21 +117,24 @@ int main(int argc, const char **argv) {
                 coef->fdata = temp;
         }
 
-        START_TIMER(computing);
         struct logger log;
         logger_start(&log, csv_log);
+        struct progressbar pb;
+        if(!quiet) {
+                progressbar_start(&pb, iterations[0] + iterations[1] + iterations[2]);
+        }
 #ifdef USE_OPENMP
         #pragma omp parallel for schedule(dynamic) firstprivate(log)
 #endif
         for(unsigned i = 0; i < 3; i++) {
                 log.channel = i;
-                START_TIMER(compute_1);
                 struct coef *coef = &jpeg.coefs[i];
                 uint16_t *quant_table = jpeg.quant_table[i];
-                compute(coef, &log, quant_table, weights[i], iterations[i]);
-                STOP_TIMER(compute_1);
+                compute(coef, &log, quiet ? NULL : &pb, quant_table, weights[i], iterations[i]);
         }
-        STOP_TIMER(computing);
+        if(!quiet) {
+                progressbar_done(&pb);
+        }
         if(csv_log) {
                 fclose(csv_log);
         }
@@ -133,11 +144,9 @@ int main(int argc, const char **argv) {
                 coef->fdata[i] += 128.;
         }
 
-        START_TIMER(upsampling);
         for(unsigned i = 0; i < 3; i++) {
                 upsample(&jpeg.coefs[i], jpeg.w, jpeg.h);
         }
-        STOP_TIMER(upsampling);
 
         write_png(out, jpeg.w, jpeg.h, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);
         fclose(out);

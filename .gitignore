@@ -2,6 +2,7 @@
 *.i
 *.s
 *.d
+*.exe
 
 *.png
 *.jpg

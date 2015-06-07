@@ -6,6 +6,22 @@ jpeg2png is smarter and fills the missing information to create the smoothest po
 
 ``$ jpeg2png input.jpg output.png``
 
+## [Examples](/../../tree/images)
+
+![Lena](/../images/lena_tiles.png?raw=true)
+
+* Top left: [original](../images/lena.png) Lena image
+* Top right: original, 64x64 detail
+* Bottom left: [JPEG encoded](../images/lena.jpg) at 10% quality with 4:2:0 chroma subsampling using the GIMP, 64x64 detail
+* Bottom right: [JPEG decoded](../images/lena_restored.jpg) with jpeg2png using the default settings, 64x64 detail
+
+![Hige](/../images/deviantart_tiles.png?raw=true)
+
+* Top left: [original](../images/deviantart.png) Hige image ([source](http://whitedovehemlock.deviantart.com/art/Hige-315700935))
+* Top right: original, 64x64 detail
+* Bottom left: [JPEG encoded](../images/deviantart.jpg) at 90% quality with 4:4:4 chroma subsampling using the GIMP, 64x64 detail
+* Bottom right: [JPEG decoded](../images/deviantart_restored.png) with jpeg2png using the default settings, 64x64 detail
+
 ## Availability
 
 jpeg2png is written in portable C, specfically C11. It relies on libjpeg and libpng.
@@ -72,10 +88,8 @@ The step size chosen is ``radius(Q) / sqrt(1 + number of steps)``, where ``radiu
 
 ## To Do
 
-* create some example images
-* do some testing on different kinds of images
+* do more testing on different kinds of images
 * make comparisons with known JPEG artifact reduction techniques
-* create precompiled .exe for Windows
 * investigate automake / autoconf
 * investigate smoothing methods
 * investigate other stop conditions than a fixed number of steps
@@ -103,7 +117,7 @@ I found this after I figured it out but it's still a good read.
 
 [4] ["Artifact-Free Decompression and Zooming of JPEG Compressed Images with Total Generalized Variation" (2013) by Kristian Bredies, Martin Holler](http://www.ma.tum.de/foswiki/pub/IGDK1754/ProceedingOther/BrediesHoller_2013.pdf)
 
-More advanced than the above, considers subsampling, TGV, primal-dual algorithms. Promo material [[video\]](http://www.youtube.com/watch?v=GJG3B4X3eiQ) [[presentation\]](http://www.uni-graz.at/~hollerm/presentations/presentation_tgv_jpeg.pdf) [[TO\]](https://static.uni-graz.at/fileadmin/forschen/dokumente/technologietransfer/TO_JPEG_TGV.pdf)
+More advanced than the above, considers subsampling, TGV, primal-dual algorithms. Promo material [[video](http://www.youtube.com/watch?v=GJG3B4X3eiQ)] [[presentation](http://www.uni-graz.at/~hollerm/presentations/presentation_tgv_jpeg.pdf)] [[TO](https://static.uni-graz.at/fileadmin/forschen/dokumente/technologietransfer/TO_JPEG_TGV.pdf)]
 
 ## License
 

@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdnoreturn.h>
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
 
 #include "gopt/gopt.h"
 
@@ -39,7 +42,17 @@ noreturn static void usage() {
                 "\n"
                 "-q\n"
                 "--quiet\n"
-                "don't show the progress bar\n"
+                "\tdon't show the progress bar\n"
+                "\n"
+                "-t threads\n"
+                "--threads threads\n"
+#ifndef USE_OPENMP
+                "\t*this version was compiled without support for threads*\n"
+                "\n"
+#endif
+                "\tthreads is a positive integer for the maximum number of threads used\n"
+                "\tequivalent to setting the environment variable OMP_NUM_THREADS\n"
+                "\tdefault: number of CPUs\n"
                 "\n"
                 "-c csv_log\n"
                 "--csv_log csv_log\n"
@@ -53,6 +66,7 @@ int main(int argc, const char **argv) {
         void *options = gopt_sort(&argc, argv, gopt_start(
                 gopt_option('h', GOPT_NOARG, gopt_shorts( 'h', '?' ), gopt_longs("help")),
                 gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs("csv-log")),
+                gopt_option('t', GOPT_ARG, gopt_shorts('t'), gopt_longs("threads")),
                 gopt_option('q', GOPT_NOARG, gopt_shorts('q'), gopt_longs("quiet")),
                 gopt_option('i', GOPT_ARG, gopt_shorts('i'), gopt_longs("iterations")),
                 gopt_option('w', GOPT_ARG, gopt_shorts('w'), gopt_longs("second-order-weight"))));
@@ -80,6 +94,19 @@ int main(int argc, const char **argv) {
                 } else {
                         die("invalid number of iterations");
                 }
+        }
+
+        if(gopt_arg(options, 't', &arg_string)) {
+#ifdef USE_OPENMP
+                unsigned threads;
+                int n = sscanf(arg_string, "%u", &threads);
+                if(n != 1 || threads == 0) {
+                        die("invalid number of threads");
+                }
+                omp_set_num_threads(threads);
+#else
+                die("this version is compiled without support for threads");
+#endif
         }
 
         FILE *in = fopen(argv[1], "rb");

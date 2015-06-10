@@ -3,20 +3,18 @@
 
 static const unsigned progressbar_width = 70;
 
-void progressbar_start(struct progressbar *pb, unsigned max) {
-        pb->max = max;
-        progressbar_set(pb, 0);
+static unsigned get_to_print(unsigned current, unsigned max) {
+        return progressbar_width * current / max;
 }
 
-void progressbar_set(struct progressbar *pb, unsigned current) {
-        unsigned old_to_print = progressbar_width * pb->current / pb->max;
-        unsigned old_percentage = 100 * pb->current / pb->max;
-        pb->current = current;
-        unsigned to_print = progressbar_width * pb->current / pb->max;
-        unsigned percentage = 100 * pb->current / pb->max;
-        if(old_to_print == to_print && old_percentage == percentage) {
-                return;
-        }
+static unsigned get_percentage(unsigned current, unsigned max) {
+        return 100 * current / max;
+}
+
+static void progressbar_show(struct progressbar *pb) {
+        unsigned to_print = get_to_print(pb->current, pb->max);
+        unsigned percentage = get_percentage(pb->current, pb->max);
+
         printf("\r[");
         for(unsigned i = 0; i < to_print; i++) {
                 printf("#");
@@ -26,6 +24,24 @@ void progressbar_set(struct progressbar *pb, unsigned current) {
         }
         printf("] %3d%%", percentage);
         fflush(stdout);
+}
+
+void progressbar_start(struct progressbar *pb, unsigned max) {
+        pb->max = max;
+        pb->current = 0;
+        progressbar_show(pb);
+}
+
+void progressbar_set(struct progressbar *pb, unsigned current) {
+        unsigned old_to_print = get_to_print(pb->current, pb->max);
+        unsigned old_percentage = get_percentage(pb->current, pb->max);
+        unsigned to_print = get_to_print(current, pb->max);
+        unsigned percentage = get_percentage(current, pb->max);
+        pb->current = current;
+        if(old_to_print == to_print && old_percentage == percentage) {
+                return;
+        }
+        progressbar_show(pb);
 }
 
 void progressbar_add(struct progressbar *pb, unsigned n) {

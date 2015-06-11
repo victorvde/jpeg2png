@@ -10,6 +10,6 @@ struct logger {
 };
 
 void logger_start(struct logger *log, FILE *csv_log);
-void logger_log(struct logger *log, double objective, double tv, double tv2);
+void logger_log(struct logger *log, double objective, double prob_dist, double tv, double tv2);
 
 #endif

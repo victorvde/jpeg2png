@@ -18,6 +18,7 @@
 #include "progressbar.h"
 
 static const float default_weight = 0.3;
+static const float default_pweight = 0.001;
 static const unsigned default_iterations = 50;
 
 noreturn static void usage() {
@@ -33,6 +34,14 @@ noreturn static void usage() {
                 "\tweights for the chroma channels always default to 0.\n"
                 "\tdefault value: %g\n"
                 "\n"
+                "-p pweight[,pweight_cb,pweight_cr]\n"
+                "--probability-weight pweight[,pweight_cb,pweight_cr]\n"
+                "\tpweight is a floating point number for DCT coefficient distance weight\n"
+                "\thigher values make the result more similar to the source JPEG\n"
+                "\ta value of 1.0 means approximately equivalent weight to the first order weight\n"
+                "\ta value of 0.0 means to ignore this and gives a speed boost\n"
+                "\tweights for the chroma channels default to the luma weight.\n"
+                "\tdefault value: %g\n"
                 "-i iterations[,iterations_cb,iterations_cr]\n"
                 "--iterations iterations[,iterations_cb,iterations_cr]\n"
                 "\titerations is an integer for the number of optimization steps\n"
@@ -58,7 +67,7 @@ noreturn static void usage() {
                 "--csv_log csv_log\n"
                 "\tcsv_log is a file name for the optimization log\n"
                 "\tdefault: none\n"
-                , default_weight, default_iterations);
+                , default_weight, default_pweight, default_iterations);
         exit(EXIT_FAILURE);
 }
 
@@ -69,6 +78,7 @@ int main(int argc, const char **argv) {
                 gopt_option('t', GOPT_ARG, gopt_shorts('t'), gopt_longs("threads")),
                 gopt_option('q', GOPT_NOARG, gopt_shorts('q'), gopt_longs("quiet")),
                 gopt_option('i', GOPT_ARG, gopt_shorts('i'), gopt_longs("iterations")),
+                gopt_option('p', GOPT_ARG, gopt_shorts('p'), gopt_longs("probability-weight")),
                 gopt_option('w', GOPT_ARG, gopt_shorts('w'), gopt_longs("second-order-weight"))));
         if(argc != 3 || gopt(options, 'h')) {
                 usage();
@@ -81,6 +91,18 @@ int main(int argc, const char **argv) {
                         // ok
                 } else {
                         die("invalid weight");
+                }
+        }
+        float pweights[3] = {default_pweight, default_pweight, default_pweight};
+        if(gopt_arg(options, 'p', &arg_string)) {
+                int n = sscanf(arg_string, "%f,%f,%f", &pweights[0], &pweights[1], &pweights[2]);
+                if(n == 3) {
+                        // ok
+                } else if(n == 1) {
+                        pweights[1] = pweights[0];
+                        pweights[2] = pweights[0];
+                } else {
+                        die("invalid probability weight");
                 }
         }
         unsigned iterations[3] = {default_iterations, default_iterations, default_iterations};
@@ -157,7 +179,7 @@ int main(int argc, const char **argv) {
                 log.channel = i;
                 struct coef *coef = &jpeg.coefs[i];
                 uint16_t *quant_table = jpeg.quant_table[i];
-                compute(coef, &log, quiet ? NULL : &pb, quant_table, weights[i], iterations[i]);
+                compute(coef, &log, quiet ? NULL : &pb, quant_table, weights[i], pweights[i], iterations[i]);
         }
         if(!quiet) {
                 progressbar_done(&pb);

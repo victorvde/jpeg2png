@@ -9,6 +9,34 @@
 
 #include "ooura/dct.h"
 
+// Note: destroys cos
+static double compute_step_prob(unsigned w, unsigned h, int16_t *data, float alpha, uint16_t quant_table[64], float *cos, float *obj_gradient) {
+        double prob_dist = 0.;
+        unsigned block_w = w / 8;
+        unsigned block_h = h / 8;
+        for(unsigned block_y = 0; block_y < block_h; block_y++) {
+                for(unsigned block_x = 0; block_x < block_w; block_x++) {
+                        unsigned i = block_y * block_w + block_x;
+                        float *cosb = &cos[i*64];
+                        for(unsigned j = 0; j < 64; j++) {
+                                cosb[j] -= (float)data[i*64+j] * quant_table[j];
+                                prob_dist += 0.5 * sqr(cosb[j] / quant_table[j]);
+                                cosb[j] = cosb[j] / sqr((float)quant_table[j]);
+                        }
+                        idct8x8s(cosb);
+                        for(unsigned in_y = 0; in_y < 8; in_y++) {
+                                for(unsigned in_x = 0; in_x < 8; in_x++) {
+                                        unsigned j = in_y * 8 + in_x;
+                                        unsigned x = block_x * 8 + in_x;
+                                        unsigned y = block_y * 8 + in_y;
+                                        *p(obj_gradient, x, y, w, h) += alpha * cosb[j];
+                                }
+                        }
+                }
+        }
+        return prob_dist;
+}
+
 #ifdef USE_SIMD
   #include "compute_simd_step.c"
   #define compute_step_tv compute_step_tv_simd
@@ -101,8 +129,15 @@ static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, floa
         return tv2;
 }
 
-static double compute_step(unsigned w, unsigned h, float *in, float *out, float step_size, float weight, float *temp[3], struct logger *log) {
+static double compute_step(
+        unsigned w, unsigned h, float *in, float *out,
+        float step_size, float weight, float pweight,
+        int16_t *data, uint16_t quant_table[64], float *cos,
+        float *temp[3],
+        struct logger *log)
+{
         float alpha = weight / sqrt(4. / 2.);
+        float p_alpha = pweight * 2. * 255. * sqrt(2.);
         float *obj_gradient = temp[0];
         float *in_x = temp[1];
         float *in_y = temp[2];
@@ -110,6 +145,8 @@ static double compute_step(unsigned w, unsigned h, float *in, float *out, float 
         for(unsigned i = 0; i < h * w; i++) {
                 obj_gradient[i] = 0.;
         }
+
+        double prob_dist = pweight == 0. ? 0. : compute_step_prob(w, h, data, p_alpha, quant_table, cos, obj_gradient);
 
         double tv = compute_step_tv(w, h, in, obj_gradient, in_x, in_y);
 #ifdef SIMD_VERIFY
@@ -128,8 +165,8 @@ static double compute_step(unsigned w, unsigned h, float *in, float *out, float 
                 out[i] = in[i] - step_size * (obj_gradient[i] /  norm);
         }
 
-        double objective = (tv + alpha * tv2) / (alpha + 1.);
-        logger_log(log, objective, tv, tv2);
+        double objective = (tv + alpha * tv2 + p_alpha * prob_dist) / (1. + alpha + p_alpha);
+        logger_log(log, objective, prob_dist, tv, tv2);
 
         return objective;
 }
@@ -188,27 +225,29 @@ static void compute_aux_destroy(struct compute_aux *aux) {
         free_real(aux->fista);
 }
 
-static void compute_projection(unsigned w, unsigned h, float *fdata, float *cos, float *q_min, float *q_max) {
+static void compute_projection(unsigned w, unsigned h, float *fdata, float *temp, float *cos, float *q_min, float *q_max) {
         unsigned blocks = (h / 8) * (w / 8);
 
-        box(fdata, cos, w, h);
+        box(fdata, temp, w, h);
 
         for(unsigned i = 0; i < blocks; i++) {
-                dct8x8s(&cos[i*64]);
+                dct8x8s(&temp[i*64]);
         }
 
         for(unsigned i = 0; i < h * w; i++) {
-                cos[i] = CLAMP(cos[i], q_min[i], q_max[i]);
+                temp[i] = CLAMP(temp[i], q_min[i], q_max[i]);
         }
+
+        memcpy(cos, temp, w * h * sizeof(float));
 
         for(unsigned i = 0; i < blocks; i++) {
-                idct8x8s(&cos[i*64]);
+                idct8x8s(&temp[i*64]);
         }
 
-        unbox(cos, fdata, w, h);
+        unbox(temp, fdata, w, h);
 }
 
-void compute(struct coef *coef, struct logger *log, struct progressbar *pb, uint16_t quant_table[64], float weight, unsigned iterations) {
+void compute(struct coef *coef, struct logger *log, struct progressbar *pb, uint16_t quant_table[64], float weight, float pweight, unsigned iterations) {
         unsigned h = coef->h;
         unsigned w = coef->w;
         float *fdata = coef->fdata;
@@ -230,8 +269,8 @@ void compute(struct coef *coef, struct logger *log, struct progressbar *pb, uint
                 fdata = aux.fista;
                 aux.fista = t;
 
-                compute_step(w, h, fdata, fdata, radius / sqrt(1 + iterations), weight, aux.temp, log);
-                compute_projection(w, h, fdata, aux.cos, aux.q_min, aux.q_max);
+                compute_step(w, h, fdata, fdata, radius / sqrt(1 + iterations), weight, pweight, coef->data, quant_table, aux.cos, aux.temp, log);
+                compute_projection(w, h, fdata, aux.temp[0], aux.cos, aux.q_min, aux.q_max);
 
                 if(pb) {
 #ifdef USE_OPENMP

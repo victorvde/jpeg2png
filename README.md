@@ -28,6 +28,8 @@ jpeg2png is written in portable C, specfically C11. It relies on libjpeg and lib
 You can compile the executable using make and gcc.
 jpeg2png is licensed GPLv3+.
 
+A precompiled Windows version is available on the ["Releases" page](../../releases).
+
 ## What "smooth" means
 jpeg2png finds the smoothest possible picture that encodes to the given JPEG file.
 But what is "smooth"? A first approximation is [Total Variation](https://en.wikipedia.org/wiki/Total_variation_denoising).

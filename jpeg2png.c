@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdnoreturn.h>
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -17,6 +18,7 @@
 #include "logger.h"
 #include "progressbar.h"
 
+#define JPEG2PNG_VERSION "0.2"
 static const float default_weight = 0.3;
 static const float default_pweight = 0.001;
 static const unsigned default_iterations = 50;
@@ -73,13 +75,22 @@ noreturn static void usage() {
                 "--csv_log csv_log\n"
                 "\tcsv_log is a file name for the optimization log\n"
                 "\tdefault: none\n"
+                "\n"
+                "-h\n"
+                "--help\n"
+                "\tdisplay this help text and exit\n"
+                "\n"
+                "-V\n"
+                "--version\n"
+                "\tdisplay version information and exit\n"
                 , default_weight, default_pweight, default_iterations);
         exit(EXIT_FAILURE);
 }
 
 int main(int argc, const char **argv) {
         void *options = gopt_sort(&argc, argv, gopt_start(
-                gopt_option('h', GOPT_NOARG, gopt_shorts( 'h', '?' ), gopt_longs("help")),
+                gopt_option('h', GOPT_NOARG, gopt_shorts('h','?'), gopt_longs("help")),
+                gopt_option('V', GOPT_NOARG, gopt_shorts('V'), gopt_longs("version")),
                 gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs("csv-log")),
                 gopt_option('t', GOPT_ARG, gopt_shorts('t'), gopt_longs("threads")),
                 gopt_option('q', GOPT_NOARG, gopt_shorts('q'), gopt_longs("quiet")),
@@ -87,6 +98,10 @@ int main(int argc, const char **argv) {
                 gopt_option('i', GOPT_ARG, gopt_shorts('i'), gopt_longs("iterations")),
                 gopt_option('p', GOPT_ARG, gopt_shorts('p'), gopt_longs("probability-weight")),
                 gopt_option('w', GOPT_ARG, gopt_shorts('w'), gopt_longs("second-order-weight"))));
+        if(gopt(options, 'V')) {
+                printf("jpeg2png version "JPEG2PNG_VERSION" licensed GPLv3+\n");
+                exit(EXIT_FAILURE);
+        }
         if(argc != 3 || gopt(options, 'h')) {
                 usage();
         }

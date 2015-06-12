@@ -23,7 +23,7 @@ static const unsigned default_iterations = 50;
 
 noreturn static void usage() {
         printf(
-                "usage: jpeg2png in.jpg out.png [-w weight] [-i iterations] [-q] [-c csv_log]\n"
+                "usage: jpeg2png in.jpg out.png [flags...]\n"
                 "\n"
                 "-w weight[,weight_cb,weight_cr]\n"
                 "--second-order-weight weight[,weight_cb,weight_cr]\n"
@@ -38,10 +38,11 @@ noreturn static void usage() {
                 "--probability-weight pweight[,pweight_cb,pweight_cr]\n"
                 "\tpweight is a floating point number for DCT coefficient distance weight\n"
                 "\thigher values make the result more similar to the source JPEG\n"
-                "\ta value of 1.0 means approximately equivalent weight to the first order weight\n"
+                "\ta value of 1.0 means about equivalent weight to the first order weight\n"
                 "\ta value of 0.0 means to ignore this and gives a speed boost\n"
                 "\tweights for the chroma channels default to the luma weight.\n"
                 "\tdefault value: %g\n"
+                "\n"
                 "-i iterations[,iterations_cb,iterations_cr]\n"
                 "--iterations iterations[,iterations_cb,iterations_cr]\n"
                 "\titerations is an integer for the number of optimization steps\n"

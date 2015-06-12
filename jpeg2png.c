@@ -40,7 +40,7 @@ noreturn static void usage() {
                 "\thigher values make the result more similar to the source JPEG\n"
                 "\ta value of 1.0 means about equivalent weight to the first order weight\n"
                 "\ta value of 0.0 means to ignore this and gives a speed boost\n"
-                "\tweights for the chroma channels default to the luma weight.\n"
+                "\tweights for the chroma channels default to the luma weight\n"
                 "\tdefault value: %g\n"
                 "\n"
                 "-i iterations[,iterations_cb,iterations_cr]\n"
@@ -64,6 +64,11 @@ noreturn static void usage() {
                 "\tequivalent to setting the environment variable OMP_NUM_THREADS\n"
                 "\tdefault: number of CPUs\n"
                 "\n"
+                "-1\n"
+                "--16-bits-png\n"
+                "\toutput PNG with 16 bits color depth instead of the usual 8 bits\n"
+                "\tyou should use a high number of iterations when using this option\n"
+                "\n"
                 "-c csv_log\n"
                 "--csv_log csv_log\n"
                 "\tcsv_log is a file name for the optimization log\n"
@@ -78,6 +83,7 @@ int main(int argc, const char **argv) {
                 gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs("csv-log")),
                 gopt_option('t', GOPT_ARG, gopt_shorts('t'), gopt_longs("threads")),
                 gopt_option('q', GOPT_NOARG, gopt_shorts('q'), gopt_longs("quiet")),
+                gopt_option('1', GOPT_NOARG, gopt_shorts('1'), gopt_longs("16-bits-png")),
                 gopt_option('i', GOPT_ARG, gopt_shorts('i'), gopt_longs("iterations")),
                 gopt_option('p', GOPT_ARG, gopt_shorts('p'), gopt_longs("probability-weight")),
                 gopt_option('w', GOPT_ARG, gopt_shorts('w'), gopt_longs("second-order-weight"))));
@@ -144,6 +150,7 @@ int main(int argc, const char **argv) {
         }
 
         bool quiet = gopt(options, 'q');
+        unsigned png_bits = gopt(options, '1') ? 16 : 8;
 
         gopt_free(options);
 
@@ -198,7 +205,7 @@ int main(int argc, const char **argv) {
                 upsample(&jpeg.coefs[i], jpeg.w, jpeg.h);
         }
 
-        write_png(out, jpeg.w, jpeg.h, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);
+        write_png(out, jpeg.w, jpeg.h, png_bits, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);
         fclose(out);
 
         for(unsigned i = 0; i < 3; i++) {

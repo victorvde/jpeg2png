@@ -39,10 +39,18 @@ What we need is to look not just at the differences, but also at the differences
 This called Total Generalized Variation[1]. The sum of differences of differences for
 ``0 1 2 3 4`` is 0, and for ``0 0 0 4 4`` it is 4.
 
-To combine the first order sum of differences and the second order sum of differences we choose a weight w.
+To combine the first order sum of differences and the sum of second order differences we choose a weight w.
 Then the total smoothness of ``0 1 2 3 4`` is ``4 + w * 0``, and of ``0 0 0 4 4`` is ``4 + w * 4``.
 
-jpeg2png lets you choose the weight with the ``-w`` parameter.
+jpeg2png lets you choose the weight for the sum of second order differences with the ``-w`` parameter.
+
+Optimizing purely for smoothness can sometimes go too far.
+If we smooth ``0 3 3 .. 3 3 0`` with maximal deviation 0.5 the result is ``0.5 2.5 2.5 .. 2.5 2.5 0.5``.
+The whole inner block gets changed to fit with the border in an improbable way.
+In a real picture this can be seen as a slight change in brightness or color.
+To prevent this we also optimize for the minimal sum of squared deviations of DCT coefficients, with a very small weight.
+
+jpeg2png lets you choose the weight for the sum of squared deviations with the ``-p`` parameter.
 
 ## Finding the smoothest picture
 Now we know what we are looking for. But how do we find it?
@@ -58,9 +66,7 @@ The quality could be better, but compared to regular decoding it is already very
 A high number of steps, like 1000, might take a few minutes.
 The quality is very good, but such a high number is probably overkill.
 
-
 ## Nitty gritty
-
 JPEG encoding goes something like
 ``convert colors to YCbCr -> chroma subsampling -> blockwise DCT -> quantization -> rounding -> entropy coding``
 
@@ -71,22 +77,24 @@ The crucial step that is missing in decoding is reversing the rounding.
 Of course rounding is not one-to-one invertible, but we can unround x to the interval ``[x-0.5, x+0.5]``.
 This gives us the set of possible pictures.
 
-Our objective is to minimize ``sum_i=1^n (norm(gradient(u_i))) + w * sum_i=1^n (norm(gradient(gradient(u_i))))``.
+Our objective is to minimize ``sum i=1 to n (norm(gradient(u_i))) + w * sum i=1 to n (norm(gradient(gradient(u_i)))) + p * sum (DCT(u-original)/quant)^2)``.
 To get the gradient for the TV term of the objective we use forward differences.
 The norm is an Euclidian norm.
 For the second order TVG term we use backward differences for the second gradient, giving us a 2x2 Hessian matrix.
 Currently we do not symmetrize the matrix.
 The norm here is a Frobenius norm.
 We do not use any higher order TVG terms.
+The deviations are normalized by the quantization factors.
+We do not differentiate between deviations in the DC and AC coefficients.
 
 The objective is convex and our search space ``Q`` is convex too.
 Unfortunately if one of the norms is zero the gradient of our objective is not defined, so our objective is not smooth.
-We can project onto our search space easily because DCT is orthogonal. So we can DCT, project onto the box ``[-0.5, +0.5]^n``, and IDCT back.
+We can project onto our search space easily because DCT is orthogonal. So we can DCT, project the deviations onto the box ``[-0.5, +0.5]^n``, and IDCT back.
 
 We use the subgradient method with projection and FISTA acceleration. The subderivative chosen when a norm is zero is 0.
-The step size chosen is ``radius(Q) / sqrt(1 + number of steps)``, where ``radius(Q) is sqrt(n) / 2``.
+The step size chosen is ``radius(Q) / sqrt(1 + number of steps)``, where ``radius(Q)`` is ``sqrt(n) / 2``.
 
-## To Do
+## Wishlist
 
 * do more testing on different kinds of images
 * make comparisons with known JPEG artifact reduction techniques
@@ -118,6 +126,14 @@ I found this after I figured it out but it's still a good read.
 [4] ["Artifact-Free Decompression and Zooming of JPEG Compressed Images with Total Generalized Variation" (2013) by Kristian Bredies, Martin Holler](http://www.ma.tum.de/foswiki/pub/IGDK1754/ProceedingOther/BrediesHoller_2013.pdf)
 
 More advanced than the above, considers subsampling, TGV, primal-dual algorithms. Promo material [[video](http://www.youtube.com/watch?v=GJG3B4X3eiQ)] [[presentation](http://www.uni-graz.at/~hollerm/presentations/presentation_tgv_jpeg.pdf)] [[TO](https://static.uni-graz.at/fileadmin/forschen/dokumente/technologietransfer/TO_JPEG_TGV.pdf)]
+
+[5] ["DCT Quantization Noise in Compressed Images" by Mark A. Robertson and Robert L. Stevenson](https://www3.nd.edu/~lisa/mrobert2/csvt2001submit.pdf)
+
+This is the source for the DCT deviations model. Uniform distribution for the errors is close enough, even if a generalized normal distribution with beta = 1/2 is more realistic. I ignore the HMRF stuff because I find the Huber function very ad-hoc and inelegant.
+
+## Links
+
+[qjpegrest](http://viric.name/soft/qjpegrest/) is a tool that lets you try many different JPEG restoration methods (TV based, bandpass based and Huber MRF based). I didn't get it to compile because it's old and I'm allergic to CMake, but I learned from the code.
 
 ## License
 

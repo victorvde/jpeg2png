@@ -257,17 +257,20 @@ void compute(struct coef *coef, struct logger *log, struct progressbar *pb, uint
         compute_aux_init(w, h, coef->data, quant_table, fdata, &aux);
 
         float radius = sqrt(w*h) / 2;
+        float t = 1;
         for(unsigned i = 0; i < iterations; i++) {
                 log->iteration = i;
 
-                float k = i;
+                float tnext = (1 + sqrt(1 + 4 * sqr(t))) / 2;
+                float factor = (t - 1) / tnext;
                 for(unsigned j = 0; j < w * h; j++) {
-                        aux.fista[j] = fdata[j] + (k - 2.)/(k+1.) * (fdata[j] - aux.fista[j]);
+                        aux.fista[j] = fdata[j] + factor * (fdata[j] - aux.fista[j]);
                 }
+                t = tnext;
 
-                float *t = fdata;
+                float *f = fdata;
                 fdata = aux.fista;
-                aux.fista = t;
+                aux.fista = f;
 
                 compute_step(w, h, fdata, fdata, radius / sqrt(1 + iterations), weight, pweight, coef->data, quant_table, aux.cos, aux.temp, log);
                 compute_projection(w, h, fdata, aux.temp[0], aux.cos, aux.q_min, aux.q_max);

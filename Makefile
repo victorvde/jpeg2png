@@ -8,14 +8,14 @@ CFLAGS+=-DUSE_OPENMP
 CFLAGS+=-O3 -DNDEBUG
 # CFLAGS+=-Og -DNDEBUG
 # CFLAGS+=-save-temps -masm=intel -fverbose-asm
-LFLAGS+=-s
+LDFLAGS+=-s
 # BFLAGS+=-pg -g
 BFLAGS+=-fopenmp
 LIBS:=-ljpeg -lpng -lm -lz
 OBJS:=jpeg2png.o utils.o jpeg.o png.o box.o upsample.o compute.o logger.o progressbar.o gopt/gopt.o ooura/dct.o
 
 jpeg2png$(EXE): $(OBJS)
-	$(CC) $^ -o $@ $(LFLAGS) $(BFLAGS) $(LIBS)
+	$(CC) $^ -o $@ $(LDFLAGS) $(BFLAGS) $(LIBS)
 
 -include $(OBJS:.o=.d)
 

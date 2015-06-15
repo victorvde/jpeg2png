@@ -83,7 +83,7 @@ Our objective is to minimize ``sum i=1 to n (norm(gradient(u_i))) + w * sum i=1 
 To get the gradient for the TV term of the objective we use forward differences.
 The norm is an Euclidian norm.
 For the second order TVG term we use backward differences for the second gradient, giving us a 2x2 Hessian matrix.
-Currently we do not symmetrize the matrix.
+We symmetrize the matrix, that is we average dxdy and dydx.
 The norm here is a Frobenius norm.
 We do not use any higher order TVG terms.
 The deviations are normalized by the quantization factors.

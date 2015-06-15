@@ -100,13 +100,20 @@ The step size chosen is ``radius(Q) / sqrt(1 + number of steps)``, where ``radiu
 
 * do more testing on different kinds of images
 * make comparisons with known JPEG artifact reduction techniques
-* investigate automake / autoconf
-* investigate smoothing methods
-* investigate other stop conditions than a fixed number of steps
-* investigate dual methods, Bregman
-* optimize more
-* investigate better chroma upsampling
-* support gray-scale, maybe other JPEG features
+* investigate optimizing all components together
+* make it go faster
+* ~~investigate better chroma upsampling~~
+  * too late, too small to make a real difference
+* ~~investigate automake / autoconf~~
+  * too much work to learn, patches welcome
+* ~~investigate smoothing methods~~
+  * only accelerates the start, no improvement in the end
+* ~~investigate other stop conditions than a fixed number of steps~~
+  * no good criterium when using subgradient method
+* ~~investigate dual methods, Bregman~~
+  * too complicated and inflexible, primal-dual has a good stopping criterium but same complexity
+* ~~support gray-scale, maybe other JPEG features~~
+  * low interest, file an issue if you have a real-world use for this
 
 ## References with comments
 

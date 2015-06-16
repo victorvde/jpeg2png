@@ -47,39 +47,65 @@ static double compute_step_prob(unsigned w, unsigned h, int16_t *data, float alp
         return prob_dist;
 }
 
-#ifdef USE_SIMD
-  #include "compute_simd_step.c"
-  #define compute_step_tv compute_step_tv_simd
-#else
-  #define compute_step_tv compute_step_tv_c
-#endif
+static double compute_step_tv_c(unsigned w, unsigned h, unsigned ncoef, struct compute_aux auxs[ncoef]) {
+        struct deriv {float g_x; float g_y;};
 
-POSSIBLY_UNUSED static double compute_step_tv_c(unsigned w, unsigned h, float *in, float *obj_gradient, float *in_x, float *in_y) {
         double tv = 0.;
+        struct deriv *derivs = malloc(sizeof(*derivs) * ncoef);
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
-                        // forward gradient x
-                        float g_x = x >= w-1 ? 0. : *p(in, x+1, y, w, h) - *p(in, x, y, w, h);
-                        // forward gradient y
-                        float g_y = y >= h-1 ? 0. : *p(in, x, y+1, w, h) - *p(in, x, y, w, h);
-                        // norm
-                        float g_norm = sqrt(sqr(g_x) + sqr(g_y));
-                        tv += g_norm;
-                        // compute derivatives
-                        if(g_norm != 0) {
-                                *p(obj_gradient, x, y, w, h) += -(g_x + g_y) / g_norm;
-                                if(x < w-1) {
-                                        *p(obj_gradient, x+1, y, w, h) += g_x / g_norm;
-                                }
-                                if(y < h-1) {
-                                        *p(obj_gradient, x, y+1, w, h) += g_y / g_norm;
-                                }
+                        for(unsigned c = 0; c < ncoef; c++) {
+                                struct deriv *deriv = &derivs[c];
+                                struct compute_aux *aux = &auxs[c];
+                                // forward gradient x
+                                deriv->g_x = x >= w-1 ? 0. : *p(aux->fdata, x+1, y, w, h) - *p(aux->fdata, x, y, w, h);
+                                // forward gradient y
+                                deriv->g_y = y >= h-1 ? 0. : *p(aux->fdata, x, y+1, w, h) - *p(aux->fdata, x, y, w, h);
                         }
-                        *p(in_x, x, y, w, h) = g_x;
-                        *p(in_y, x, y, w, h) = g_y;
+                        // norm
+                        float g_norm = 0.;
+                        for(unsigned c = 0; c < ncoef; c++) {
+                                struct deriv *deriv = &derivs[c];
+                                g_norm += sqr(deriv->g_x);
+                                g_norm += sqr(deriv->g_y);
+                        }
+                        g_norm = sqrt(g_norm);
+                        float alpha = 1./sqrt(ncoef);
+                        tv += alpha * g_norm;
+                        // compute derivatives
+                        for(unsigned c = 0; c < ncoef; c++) {
+                                float g_x = derivs[c].g_x;
+                                float g_y = derivs[c].g_y;
+                                struct compute_aux *aux = &auxs[c];
+                                if(g_norm != 0) {
+                                        *p(aux->obj_gradient, x, y, w, h) += alpha * -(g_x + g_y) / g_norm;
+                                        if(x < w-1) {
+                                                *p(aux->obj_gradient, x+1, y, w, h) += alpha * g_x / g_norm;
+                                        }
+                                        if(y < h-1) {
+                                                *p(aux->obj_gradient, x, y+1, w, h) += alpha * g_y / g_norm;
+                                        }
+                                }
+                                *p(aux->temp[0], x, y, w, h) = g_x;
+                                *p(aux->temp[1], x, y, w, h) = g_y;
+                        }
                 }
         }
+        free(derivs);
         return tv;
+}
+
+#ifdef USE_SIMD
+#include "compute_simd_step.c"
+#endif
+static double compute_step_tv(unsigned w, unsigned h, unsigned ncoef, struct compute_aux auxs[ncoef]) {
+#ifdef USE_SIMD
+        if(ncoef == 1) {
+                struct compute_aux *aux = &auxs[0];
+                return compute_step_tv_simd(w, h, aux->fdata, aux->obj_gradient, aux->temp[0], aux->temp[1]);
+        }
+#endif
+        return compute_step_tv_c(w, h, ncoef, auxs);
 }
 
 static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, float *in_x, float *in_y, float alpha) {
@@ -135,15 +161,19 @@ static double compute_step(
 {
         float total_alpha = 0.;
 
+        double prob_dist = 0.;
+        #ifdef USE_OPENMP
+        #pragma omp parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:prob_dist)
+        #endif
         for(unsigned c = 0; c < ncoef; c++) {
                 struct compute_aux *aux = &auxs[c];
+
+                // initialize gradient
                 for(unsigned i = 0; i < h * w; i++) {
                         aux->obj_gradient[i] = 0.;
                 }
-        }
 
-        double prob_dist = 0.;
-        for(unsigned c = 0; c < ncoef; c++) {
+                // DCT coefficent distance
                 if(pweight[c] !=  0.) {
                         float p_alpha = pweight[c] * 2. * 255. * sqrt(2.);
                         total_alpha += p_alpha;
@@ -153,26 +183,25 @@ static double compute_step(
                 }
         }
 
-        double tv = 0.;
-        for(unsigned c = 0; c < ncoef; c++) {
-                total_alpha += 1.;
-                struct compute_aux *aux = &auxs[c];
-                tv += compute_step_tv(w, h, aux->fdata, aux->obj_gradient, aux->temp[0], aux->temp[1]);
-        }
+        // TV
+        total_alpha += ncoef;
+        double tv = compute_step_tv(w, h, ncoef, auxs);
 
         double tv2 = 0.;
+        #ifdef USE_OPENMP
+        #pragma omp parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:tv2)
+        #endif
         for(unsigned c = 0; c < ncoef; c++) {
+                // TVG second order
+                struct compute_aux *aux = &auxs[c];
+
                 if(weight[c] != 0) {
                         float alpha = weight[c] / sqrt(4. / 2.);
                         total_alpha += alpha;
-                        struct compute_aux *aux = &auxs[c];
                         tv2 += alpha * compute_step_tv2(w, h, aux->obj_gradient, aux->temp[0], aux->temp[1], alpha);
                 }
-        }
 
-        for(unsigned c = 0; c < ncoef; c++) {
-                struct compute_aux *aux = &auxs[c];
-
+                // do step (normalized)
                 float norm = 0.;
                 for(unsigned i = 0; i < h * w; i++) {
                         norm += sqr(aux->obj_gradient[i]);
@@ -297,14 +326,17 @@ void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struc
                 t = tnext;
 
                 compute_step(w, h, ncoef, coefs, auxs, radius / sqrt(1 + iterations), weight, pweight, log);
+                #ifdef USE_OPENMP
+                #pragma omp parallel for schedule(dynamic)
+                #endif
                 for(unsigned c = 0; c < ncoef; c++) {
                         struct compute_aux *aux = &auxs[c];
                         compute_projection(w, h, aux->fdata, aux->temp[0], aux->cos, aux->q_min, aux->q_max);
                 }
                 if(pb) {
-#ifdef USE_OPENMP
-    #pragma omp critical(progressbar)
-#endif
+                        #ifdef USE_OPENMP
+                        #pragma omp critical(progressbar)
+                        #endif
                         progressbar_inc(pb);
                 }
         }

@@ -8,6 +8,7 @@ struct coef {
         unsigned w;
         int16_t *data;
         float *fdata;
+        uint16_t quant_table[64];
 };
 
 #endif

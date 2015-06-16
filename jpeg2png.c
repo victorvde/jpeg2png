@@ -33,7 +33,7 @@ noreturn static void usage() {
                 "\thigher values give smoother transitions with less staircasing\n"
                 "\ta value of 1.0 means equivalent weight to the first order weight\n"
                 "\ta value of 0.0 means plain Total Variation, and gives a speed boost\n"
-                "\tweights for the chroma channels always default to 0.\n"
+                "\tweights for the chroma components always default to 0.\n"
                 "\tdefault value: %g\n"
                 "\n"
                 "-p pweight[,pweight_cb,pweight_cr]\n"
@@ -42,19 +42,25 @@ noreturn static void usage() {
                 "\thigher values make the result more similar to the source JPEG\n"
                 "\ta value of 1.0 means about equivalent weight to the first order weight\n"
                 "\ta value of 0.0 means to ignore this and gives a speed boost\n"
-                "\tweights for the chroma channels default to the luma weight\n"
+                "\tweights for the chroma components default to the luma weight\n"
                 "\tdefault value: %g\n"
                 "\n"
                 "-i iterations[,iterations_cb,iterations_cr]\n"
                 "--iterations iterations[,iterations_cb,iterations_cr]\n"
                 "\titerations is an integer for the number of optimization steps\n"
                 "\thigher values give better results but take more time\n"
-                "\titerations for the chroma channels default to the luma iterations\n"
+                "\titerations for the chroma components default to the luma iterations\n"
                 "\tdefault value: %d\n"
                 "\n"
                 "-q\n"
                 "--quiet\n"
                 "\tdon't show the progress bar\n"
+                "\n"
+                "-s\n"
+                "--seperate-components\n"
+                "\tseperately optimize components\n"
+                "\tthis is faster and makes multithreading more effective\n"
+                "\thowever the edges of different components can be different\n"
                 "\n"
                 "-t threads\n"
                 "--threads threads\n"
@@ -94,6 +100,7 @@ int main(int argc, const char **argv) {
                 gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs("csv-log")),
                 gopt_option('t', GOPT_ARG, gopt_shorts('t'), gopt_longs("threads")),
                 gopt_option('q', GOPT_NOARG, gopt_shorts('q'), gopt_longs("quiet")),
+                gopt_option('s', GOPT_NOARG, gopt_shorts('s'), gopt_longs("seperate-components")),
                 gopt_option('1', GOPT_NOARG, gopt_shorts('1'), gopt_longs("16-bits-png")),
                 gopt_option('i', GOPT_ARG, gopt_shorts('i'), gopt_longs("iterations")),
                 gopt_option('p', GOPT_ARG, gopt_shorts('p'), gopt_longs("probability-weight")),
@@ -105,6 +112,9 @@ int main(int argc, const char **argv) {
         if(argc != 3 || gopt(options, 'h')) {
                 usage();
         }
+
+        bool all_together = ! gopt(options, 's');
+
         const char *arg_string;
         float weights[3] = {default_weight, 0., 0.};
         if(gopt_arg(options, 'w', &arg_string)) {
@@ -131,7 +141,9 @@ int main(int argc, const char **argv) {
         if(gopt_arg(options, 'i', &arg_string)) {
                 int n = sscanf(arg_string, "%u,%u,%u", &iterations[0], &iterations[1], &iterations[2]);
                 if(n == 3) {
-                        // ok
+                        if(all_together) {
+                                die("different iteration counts are only possible when using seperated components");
+                        }
                 } else if(n == 1) {
                         iterations[1] = iterations[0];
                         iterations[2] = iterations[0];
@@ -175,7 +187,7 @@ int main(int argc, const char **argv) {
 
         for(unsigned c = 0; c < 3; c++) {
                 struct coef *coef = &jpeg.coefs[c];
-                decode_coefficients(coef, jpeg.quant_table[c]);
+                decode_coefficients(coef);
         }
 
         for(unsigned i = 0; i < 3; i++) {
@@ -192,17 +204,24 @@ int main(int argc, const char **argv) {
         struct logger log;
         logger_start(&log, csv_log);
         struct progressbar pb;
-        if(!quiet) {
-                progressbar_start(&pb, iterations[0] + iterations[1] + iterations[2]);
-        }
-#ifdef USE_OPENMP
-        #pragma omp parallel for schedule(dynamic) firstprivate(log)
-#endif
-        for(unsigned i = 0; i < 3; i++) {
-                log.channel = i;
-                struct coef *coef = &jpeg.coefs[i];
-                uint16_t *quant_table = jpeg.quant_table[i];
-                compute(coef, &log, quiet ? NULL : &pb, quant_table, weights[i], pweights[i], iterations[i]);
+        if(all_together) {
+                if(!quiet) {
+                        progressbar_start(&pb, iterations[0]);
+                }
+                log.channel = 3;
+                compute(3, jpeg.coefs, &log, quiet ? NULL : &pb, weights, pweights, iterations[0]);
+        } else {
+                if(!quiet) {
+                        progressbar_start(&pb, iterations[0] + iterations[1] + iterations[2]);
+                }
+                #ifdef USE_OPENMP
+                #pragma omp parallel for schedule(dynamic) firstprivate(log)
+                #endif
+                for(unsigned i = 0; i < 3; i++) {
+                        log.channel = i;
+                        struct coef *coef = &jpeg.coefs[i];
+                        compute(1, coef, &log, quiet ? NULL : &pb, &weights[i], &pweights[i], iterations[i]);
+                }
         }
         if(!quiet) {
                 progressbar_done(&pb);

@@ -9,10 +9,9 @@
 struct jpeg {
         unsigned h;
         unsigned w;
-        uint16_t quant_table[3][64];
         struct coef coefs[3];
 };
 
 void read_jpeg(FILE *in, struct jpeg *jpeg);
-void decode_coefficients(struct coef *coef, uint16_t *quant_table);
+void decode_coefficients(struct coef *coef);
 #endif

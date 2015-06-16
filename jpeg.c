@@ -26,7 +26,7 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
         for(int c = 0; c < d.num_components; c++) {
                 unsigned i = d.comp_info[c].quant_tbl_no;
                 JQUANT_TBL *t = d.quant_tbl_ptrs[i];
-                memcpy(jpeg->quant_table[c], t->quantval, sizeof(uint16_t) * 64);
+                memcpy(&(jpeg->coefs[c].quant_table), t->quantval, sizeof(uint16_t) * 64);
         }
 
         jvirt_barray_ptr *coefs = jpeg_read_coefficients(&d);
@@ -34,7 +34,7 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
                 jpeg_component_info *i = &d.comp_info[c];
                 unsigned h = i->height_in_blocks * 8;
                 unsigned w = i->width_in_blocks * 8;
-                int16_t *data = malloc(w * h * sizeof(int16_t));
+                int16_t *data = malloc(w * h * sizeof(*data));
                 jpeg->coefs[c].w = w;
                 jpeg->coefs[c].h = h;
                 jpeg->coefs[c].data = data;
@@ -50,13 +50,13 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
         jpeg_destroy_decompress(&d);
 }
 
-void decode_coefficients(struct coef *coef, uint16_t *quant_table) {
+void decode_coefficients(struct coef *coef) {
         coef->fdata = alloc_real(coef->h * coef->w);
         if(!coef->fdata) { die("allocation error"); }
         unsigned blocks = (coef->h / 8) * (coef->w / 8);
         for(unsigned i = 0; i < blocks; i++) {
                 for(unsigned j = 0; j < 64; j++) {
-                        coef->fdata[i*64+j] = coef->data[i*64+j] * quant_table[j];
+                        coef->fdata[i*64+j] = coef->data[i*64+j] * coef->quant_table[j];
                 }
                 idct8x8s(&(coef->fdata[i*64]));
         }

@@ -9,6 +9,16 @@
 
 #include "ooura/dct.h"
 
+struct compute_aux {
+        float *q_min;
+        float *q_max;
+        float *cos;
+        float *obj_gradient;
+        float *temp[2];
+        float *fdata;
+        float *fista;
+};
+
 // Note: destroys cos
 static double compute_step_prob(unsigned w, unsigned h, int16_t *data, float alpha, uint16_t quant_table[64], float *cos, float *obj_gradient) {
         double prob_dist = 0.;
@@ -72,21 +82,6 @@ POSSIBLY_UNUSED static double compute_step_tv_c(unsigned w, unsigned h, float *i
         return tv;
 }
 
-POSSIBLY_UNUSED static void verify_compute_step_tv(unsigned w, unsigned h, double tv, float *in, float *obj_gradient, float *in_x, float *in_y) {
-        puts("verify");
-        float *obj_gradient_ = alloc_real(w*h);
-        float *in_x_ = alloc_real(w*h);
-        float *in_y_ = alloc_real(w*h);
-        double tv_c = compute_step_tv_c(w, h, in, obj_gradient_, in_x_, in_y_);
-        compare("in_x", w, h, in_x_, in_x);
-        compare("in_y", w, h, in_y_, in_y);
-        compare("obj_gradient", w, h, obj_gradient_, obj_gradient);
-        printf("simd %f, original %f\n", tv, tv_c);
-        free_real(obj_gradient_);
-        free_real(in_y_);
-        free_real(in_x_);
-}
-
 static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, float *in_x, float *in_y, float alpha) {
         double tv2 = 0.;
         for(unsigned y = 0; y < h; y++) {
@@ -132,54 +127,68 @@ static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, floa
 }
 
 static double compute_step(
-        unsigned w, unsigned h, float *in, float *out,
-        float step_size, float weight, float pweight,
-        int16_t *data, uint16_t quant_table[64], float *cos,
-        float *temp[3],
+        unsigned w, unsigned h,
+        unsigned ncoef,
+        struct coef coefs[ncoef], struct compute_aux auxs[ncoef],
+        float step_size, float weight[ncoef], float pweight[ncoef],
         struct logger *log)
 {
-        float alpha = weight / sqrt(4. / 2.);
-        float p_alpha = pweight * 2. * 255. * sqrt(2.);
-        float *obj_gradient = temp[0];
-        float *in_x = temp[1];
-        float *in_y = temp[2];
+        float total_alpha = 0.;
 
-        for(unsigned i = 0; i < h * w; i++) {
-                obj_gradient[i] = 0.;
+        for(unsigned c = 0; c < ncoef; c++) {
+                struct compute_aux *aux = &auxs[c];
+                for(unsigned i = 0; i < h * w; i++) {
+                        aux->obj_gradient[i] = 0.;
+                }
         }
 
-        double prob_dist = pweight == 0. ? 0. : compute_step_prob(w, h, data, p_alpha, quant_table, cos, obj_gradient);
-
-        double tv = compute_step_tv(w, h, in, obj_gradient, in_x, in_y);
-#ifdef SIMD_VERIFY
-        verify_compute_step_tv(w, h, tv, in, obj_gradient, in_x, in_y);
-#endif
-
-        double tv2 = alpha == 0. ? 0. : compute_step_tv2(w, h, obj_gradient, in_x, in_y, alpha);
-
-        float norm = 0.;
-        for(unsigned i = 0; i < h * w; i++) {
-                norm += sqr(obj_gradient[i]);
-        }
-        norm = sqrt(norm);
-
-        for(unsigned i = 0; i < h * w; i++) {
-                out[i] = in[i] - step_size * (obj_gradient[i] /  norm);
+        double prob_dist = 0.;
+        for(unsigned c = 0; c < ncoef; c++) {
+                if(pweight[c] !=  0.) {
+                        float p_alpha = pweight[c] * 2. * 255. * sqrt(2.);
+                        total_alpha += p_alpha;
+                        struct compute_aux *aux = &auxs[c];
+                        struct coef *coef = &coefs[c];
+                        prob_dist += p_alpha * compute_step_prob(w, h, coef->data, p_alpha, coef->quant_table, aux->cos, aux->obj_gradient);
+                }
         }
 
-        double objective = (tv + alpha * tv2 + p_alpha * prob_dist) / (1. + alpha + p_alpha);
+        double tv = 0.;
+        for(unsigned c = 0; c < ncoef; c++) {
+                total_alpha += 1.;
+                struct compute_aux *aux = &auxs[c];
+                tv += compute_step_tv(w, h, aux->fdata, aux->obj_gradient, aux->temp[0], aux->temp[1]);
+        }
+
+        double tv2 = 0.;
+        for(unsigned c = 0; c < ncoef; c++) {
+                if(weight[c] != 0) {
+                        float alpha = weight[c] / sqrt(4. / 2.);
+                        total_alpha += alpha;
+                        struct compute_aux *aux = &auxs[c];
+                        tv2 += alpha * compute_step_tv2(w, h, aux->obj_gradient, aux->temp[0], aux->temp[1], alpha);
+                }
+        }
+
+        for(unsigned c = 0; c < ncoef; c++) {
+                struct compute_aux *aux = &auxs[c];
+
+                float norm = 0.;
+                for(unsigned i = 0; i < h * w; i++) {
+                        norm += sqr(aux->obj_gradient[i]);
+                }
+                norm = sqrt(norm);
+
+                for(unsigned i = 0; i < h * w; i++) {
+                        aux->fdata[i] = aux->fdata[i] - step_size * (aux->obj_gradient[i] /  norm);
+                }
+        }
+
+        double objective = (tv + tv2 + prob_dist) / total_alpha;
         logger_log(log, objective, prob_dist, tv, tv2);
 
         return objective;
 }
-
-struct compute_aux {
-        float *q_min;
-        float *q_max;
-        float *cos;
-        float *temp[3];
-        float *fista;
-};
 
 static void compute_aux_init(unsigned w, unsigned h, int16_t *data, uint16_t quant_table[64], float *fdata, struct compute_aux *aux) {
         float *q_max = alloc_real(h * w);
@@ -205,11 +214,16 @@ static void compute_aux_init(unsigned w, unsigned h, int16_t *data, uint16_t qua
         }
         aux->cos = cos;
 
-        for(unsigned i = 0; i < 3; i++) {
+        for(unsigned i = 0; i < 2; i++) {
                 float *t = alloc_real(h * w);
                 if(!t) { die("allocation error"); }
                 aux->temp[i] = t;
         }
+        float *obj_gradient = alloc_real(h * w);
+        if(!obj_gradient) { die("allocation error"); }
+        aux->obj_gradient = obj_gradient;
+
+        aux->fdata = fdata;
 
         float *fista = alloc_real(h * w);
         if(!fista) { die("allocation error"); }
@@ -221,9 +235,10 @@ static void compute_aux_destroy(struct compute_aux *aux) {
         free_real(aux->cos);
         free_real(aux->q_min);
         free_real(aux->q_max);
-        for(unsigned i = 0; i < 3; i++) {
+        for(unsigned i = 0; i < 2; i++) {
                 free_real(aux->temp[i]);
         }
+        free_real(aux->obj_gradient);
         free_real(aux->fista);
 }
 
@@ -249,15 +264,20 @@ static void compute_projection(unsigned w, unsigned h, float *fdata, float *temp
         unbox(temp, fdata, w, h);
 }
 
-void compute(struct coef *coef, struct logger *log, struct progressbar *pb, uint16_t quant_table[64], float weight, float pweight, unsigned iterations) {
-        unsigned h = coef->h;
-        unsigned w = coef->w;
-        float *fdata = coef->fdata;
-        ASSUME_ALIGNED(fdata);
+void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struct progressbar *pb, float weight[ncoef], float pweight[ncoef], unsigned iterations) {
+        unsigned h = coefs[0].h;
+        unsigned w = coefs[0].w;
+        for(unsigned c = 1; c < ncoef; c++) {
+                ASSUME(coefs[c].w == w);
+                ASSUME(coefs[c].h == h);
+        }
 
-        struct compute_aux aux;
-        compute_aux_init(w, h, coef->data, quant_table, fdata, &aux);
+        struct compute_aux *auxs = malloc(sizeof(*auxs) * ncoef);
+        for(unsigned c = 0; c < ncoef; c++) {
+                compute_aux_init(w, h, coefs[c].data, coefs[c].quant_table, coefs[c].fdata, &auxs[c]);
+        }
 
+        // float radius = sqrt(sqr(w/2.) + sqr(h/2.));
         float radius = sqrt(w*h) / 2;
         float t = 1;
         for(unsigned i = 0; i < iterations; i++) {
@@ -265,18 +285,22 @@ void compute(struct coef *coef, struct logger *log, struct progressbar *pb, uint
 
                 float tnext = (1 + sqrt(1 + 4 * sqr(t))) / 2;
                 float factor = (t - 1) / tnext;
-                for(unsigned j = 0; j < w * h; j++) {
-                        aux.fista[j] = fdata[j] + factor * (fdata[j] - aux.fista[j]);
+                for(unsigned c = 0; c < ncoef; c++) {
+                        struct compute_aux *aux = &auxs[c];
+                        for(unsigned j = 0; j < w * h; j++) {
+                                aux->fista[j] = aux->fdata[j] + factor * (aux->fdata[j] - aux->fista[j]);
+                        }
+                        float *f = aux->fdata;
+                        aux->fdata = aux->fista;
+                        aux->fista = f;
                 }
                 t = tnext;
 
-                float *f = fdata;
-                fdata = aux.fista;
-                aux.fista = f;
-
-                compute_step(w, h, fdata, fdata, radius / sqrt(1 + iterations), weight, pweight, coef->data, quant_table, aux.cos, aux.temp, log);
-                compute_projection(w, h, fdata, aux.temp[0], aux.cos, aux.q_min, aux.q_max);
-
+                compute_step(w, h, ncoef, coefs, auxs, radius / sqrt(1 + iterations), weight, pweight, log);
+                for(unsigned c = 0; c < ncoef; c++) {
+                        struct compute_aux *aux = &auxs[c];
+                        compute_projection(w, h, aux->fdata, aux->temp[0], aux->cos, aux->q_min, aux->q_max);
+                }
                 if(pb) {
 #ifdef USE_OPENMP
     #pragma omp critical(progressbar)
@@ -285,6 +309,11 @@ void compute(struct coef *coef, struct logger *log, struct progressbar *pb, uint
                 }
         }
 
-        coef->fdata = fdata;
-        compute_aux_destroy(&aux);
+        for(unsigned c = 0; c < ncoef; c++) {
+                struct compute_aux *aux = &auxs[c];
+                struct coef *coef = &coefs[c];
+                coef->fdata = aux->fdata;
+                compute_aux_destroy(aux);
+        }
+        free(auxs);
 }

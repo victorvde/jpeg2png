@@ -167,6 +167,7 @@ static double compute_step(
         #endif
         for(unsigned c = 0; c < ncoef; c++) {
                 struct compute_aux *aux = &auxs[c];
+                struct coef *coef = &coefs[c];
 
                 // initialize gradient
                 for(unsigned i = 0; i < h * w; i++) {
@@ -177,8 +178,6 @@ static double compute_step(
                 if(pweight[c] !=  0.) {
                         float p_alpha = pweight[c] * 2. * 255. * sqrt(2.);
                         total_alpha += p_alpha;
-                        struct compute_aux *aux = &auxs[c];
-                        struct coef *coef = &coefs[c];
                         prob_dist += p_alpha * compute_step_prob(w, h, coef->data, p_alpha, coef->quant_table, aux->cos, aux->obj_gradient);
                 }
         }

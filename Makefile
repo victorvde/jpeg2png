@@ -1,7 +1,7 @@
 CC?=gcc
 EXE?=
 CFLAGS+=-std=c11 -pedantic -msse2 -mfpmath=sse
-WARN_FLAGS+=-Wall -Wextra -Winline
+WARN_FLAGS+=-Wall -Wextra -Winline -Wshadow
 CFLAGS+=-DBUILTIN_UNREACHABLE -DBUILTIN_ASSUME_ALIGNED -DATTRIBUTE_UNUSED
 CFLAGS+=-DUSE_SIMD
 CFLAGS+=-DUSE_OPENMP

@@ -61,10 +61,12 @@ inline float sqr(float x) {
 
 inline float *alloc_real(size_t n) {
 #if defined(_WIN32)
-        return _aligned_malloc(n * sizeof(float), 16);
+        float *f = _aligned_malloc(n * sizeof(float), 16);
 #else
-        return aligned_alloc(16, n * sizeof(float));
+        float *f = aligned_alloc(16, n * sizeof(float));
 #endif
+        if(!f) { die("allocation error"); }
+        return f;
 }
 
 inline void free_real(float *p) {

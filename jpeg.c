@@ -52,7 +52,6 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
 
 void decode_coefficients(struct coef *coef) {
         coef->fdata = alloc_real(coef->h * coef->w);
-        if(!coef->fdata) { die("allocation error"); }
         unsigned blocks = (coef->h / 8) * (coef->w / 8);
         for(unsigned i = 0; i < blocks; i++) {
                 for(unsigned j = 0; j < 64; j++) {

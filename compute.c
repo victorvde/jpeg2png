@@ -244,17 +244,14 @@ static void compute_aux_init(unsigned w, unsigned h, int16_t *data, uint16_t qua
 
         for(unsigned i = 0; i < 2; i++) {
                 float *t = alloc_real(h * w);
-                if(!t) { die("allocation error"); }
                 aux->temp[i] = t;
         }
         float *obj_gradient = alloc_real(h * w);
-        if(!obj_gradient) { die("allocation error"); }
         aux->obj_gradient = obj_gradient;
 
         aux->fdata = fdata;
 
         float *fista = alloc_real(h * w);
-        if(!fista) { die("allocation error"); }
         memcpy(fista, fdata, sizeof(float) * w * h);
         aux->fista = fista;
 }

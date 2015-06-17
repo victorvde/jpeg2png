@@ -193,7 +193,6 @@ int main(int argc, const char **argv) {
         for(unsigned i = 0; i < 3; i++) {
                 struct coef *coef = &jpeg.coefs[i];
                 float *temp = alloc_real(coef->h * coef->w);
-                if(!temp) { die("allocation error"); }
 
                 unbox(coef->fdata, temp, coef->w, coef->h);
 

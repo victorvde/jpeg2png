@@ -37,6 +37,8 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
                 int16_t *data = malloc(w * h * sizeof(*data));
                 jpeg->coefs[c].w = w;
                 jpeg->coefs[c].h = h;
+                jpeg->coefs[c].w_samp = d.max_h_samp_factor / i->h_samp_factor;
+                jpeg->coefs[c].h_samp = d.max_v_samp_factor / i->v_samp_factor;
                 jpeg->coefs[c].data = data;
                 if(!data) { die("could not allocate memory for coefs"); }
                 for(unsigned y = 0; y < h / 8; y++) {

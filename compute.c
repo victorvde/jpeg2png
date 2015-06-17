@@ -10,8 +10,6 @@
 #include "ooura/dct.h"
 
 struct compute_aux {
-        float *q_min;
-        float *q_max;
         float *cos;
         float *obj_gradient;
         float *temp[2];
@@ -218,26 +216,12 @@ static double compute_step(
         return objective;
 }
 
-static void compute_aux_init(unsigned w, unsigned h, int16_t *data, uint16_t quant_table[64], float *fdata, struct compute_aux *aux) {
-        float *q_max = alloc_real(h * w);
-        if(!q_max) { die("allocation error"); }
-        float *q_min = alloc_real(h * w);
-        if(!q_min) { die("allocation error"); }
-        unsigned blocks = (h / 8) * (w / 8);
+static void compute_aux_init(unsigned w, unsigned h, struct coef *coef, struct compute_aux *aux) {
+        float *cos = alloc_real(coef->h * coef->w);
+        unsigned blocks = (coef->h / 8) * (coef->w / 8);
         for(unsigned i = 0; i < blocks; i++) {
                 for(unsigned j = 0; j < 64; j++) {
-                        q_max[i*64+j] = (data[i*64+j] + 0.5) * quant_table[j];
-                        q_min[i*64+j] = (data[i*64+j] - 0.5) * quant_table[j];
-                }
-        }
-        aux->q_min = q_min;
-        aux->q_max = q_max;
-
-        float *cos = alloc_real(h * w);
-        if(!cos) { die("allocation error"); }
-        for(unsigned i = 0; i < blocks; i++) {
-                for(unsigned j = 0; j < 64; j++) {
-                        cos[i*64+j] = data[i*64+j] * quant_table[j];
+                        cos[i*64+j] = coef->data[i*64+j] * coef->quant_table[j];
                 }
         }
         aux->cos = cos;
@@ -249,6 +233,14 @@ static void compute_aux_init(unsigned w, unsigned h, int16_t *data, uint16_t qua
         float *obj_gradient = alloc_real(h * w);
         aux->obj_gradient = obj_gradient;
 
+        float *fdata = alloc_real(h * w);
+        for(unsigned y = 0; y < h; y++) {
+                for(unsigned x = 0; x < w; x++) {
+                        unsigned cy = MIN(y / coef->h_samp, coef->h-1);
+                        unsigned cx = MIN(x / coef->w_samp, coef->w-1);
+                        *p(fdata, x, y, w, h) = *p(coef->fdata, cx, cy, coef->w, coef->h);
+                }
+        }
         aux->fdata = fdata;
 
         float *fista = alloc_real(h * w);
@@ -258,48 +250,99 @@ static void compute_aux_init(unsigned w, unsigned h, int16_t *data, uint16_t qua
 
 static void compute_aux_destroy(struct compute_aux *aux) {
         free_real(aux->cos);
-        free_real(aux->q_min);
-        free_real(aux->q_max);
         for(unsigned i = 0; i < 2; i++) {
                 free_real(aux->temp[i]);
         }
         free_real(aux->obj_gradient);
+        free_real(aux->fdata);
         free_real(aux->fista);
 }
 
-static void compute_projection(unsigned w, unsigned h, float *fdata, float *temp, float *cos, float *q_min, float *q_max) {
-        unsigned blocks = (h / 8) * (w / 8);
+static void compute_projection(unsigned w, unsigned h, struct compute_aux *aux, struct coef *coef) {
+        unsigned blocks = (coef->h / 8) * (coef->w / 8);
+        float *subsampled;
+        float *boxed = aux->temp[0];
+        bool resample = !(coef->w == w && coef->h == h);
 
-        box(fdata, temp, w, h);
+        if(resample) {
+                subsampled = aux->temp[1];
+        } else {
+                subsampled = aux->fdata;
+        }
+
+        if(resample) {
+                for(unsigned cy = 0; cy < coef->h; cy++) {
+                        for(unsigned cx = 0; cx < coef->w; cx++) {
+                                float mean = 0.;
+                                for(unsigned sy = 0; sy < coef->h_samp; sy++) {
+                                        for(unsigned sx = 0; sx < coef->w_samp; sx++) {
+                                                unsigned y = cy * coef->h_samp + sy;
+                                                unsigned x = cx * coef->w_samp + sx;
+                                                mean += *p(aux->fdata, x, y, w, h);
+                                        }
+                                }
+                                mean /= coef->w_samp * coef->h_samp;
+                                *p(subsampled, cx, cy, coef->w, coef->h) = mean;
+                                for(unsigned sy = 0; sy < coef->h_samp; sy++) {
+                                        for(unsigned sx = 0; sx < coef->w_samp; sx++) {
+                                                unsigned y = cy * coef->h_samp + sy;
+                                                unsigned x = cx * coef->w_samp + sx;
+                                                *p(aux->fdata, x, y, w, h) -= mean;
+                                }
+                                }
+                        }
+                }
+        }
+
+        box(subsampled, boxed, coef->w, coef->h);
 
         for(unsigned i = 0; i < blocks; i++) {
-                dct8x8s(&temp[i*64]);
+                dct8x8s(&boxed[i*64]);
         }
-
-        for(unsigned i = 0; i < h * w; i++) {
-                temp[i] = CLAMP(temp[i], q_min[i], q_max[i]);
-        }
-
-        memcpy(cos, temp, w * h * sizeof(float));
 
         for(unsigned i = 0; i < blocks; i++) {
-                idct8x8s(&temp[i*64]);
+                for(unsigned j = 0; j < 64; j++) {
+                        float min = (coef->data[i*64+j] - 0.5) * coef->quant_table[j];
+                        float max = (coef->data[i*64+j] + 0.5) * coef->quant_table[j];
+                        boxed[i*64+j] = CLAMP(boxed[i*64+j], min, max);
+                }
         }
 
-        unbox(temp, fdata, w, h);
+        memcpy(aux->cos, boxed, coef->w * coef->h * sizeof(float));
+
+        for(unsigned i = 0; i < blocks; i++) {
+                idct8x8s(&boxed[i*64]);
+        }
+
+        unbox(boxed, subsampled, coef->w, coef->h);
+
+        if(resample) {
+                for(unsigned cy = 0; cy < coef->h; cy++) {
+                        for(unsigned cx = 0; cx < coef->w; cx++) {
+                                float mean = *p(subsampled, cx, cy, coef->w, coef->h);
+                                for(unsigned sy = 0; sy < coef->h_samp; sy++) {
+                                        for(unsigned sx = 0; sx < coef->w_samp; sx++) {
+                                                unsigned y = cy * coef->h_samp + sy;
+                                                unsigned x = cx * coef->w_samp + sx;
+                                                *p(aux->fdata, x, y, w, h) += mean;
+                                        }
+                                }
+                        }
+                }
+        }
 }
 
 void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struct progressbar *pb, float weight[ncoef], float pweight[ncoef], unsigned iterations) {
-        unsigned h = coefs[0].h;
-        unsigned w = coefs[0].w;
-        for(unsigned c = 1; c < ncoef; c++) {
-                ASSUME(coefs[c].w == w);
-                ASSUME(coefs[c].h == h);
+        unsigned h = 0;
+        unsigned w = 0;
+        for(unsigned c = 0; c < ncoef; c++) {
+                struct coef *coef = &coefs[c];
+                w = MAX(w, coef->w * coef->w_samp);
+                h = MAX(h, coef->h * coef->h_samp);
         }
-
         struct compute_aux *auxs = malloc(sizeof(*auxs) * ncoef);
         for(unsigned c = 0; c < ncoef; c++) {
-                compute_aux_init(w, h, coefs[c].data, coefs[c].quant_table, coefs[c].fdata, &auxs[c]);
+                compute_aux_init(w, h, &coefs[c], &auxs[c]);
         }
 
         // float radius = sqrt(sqr(w/2.) + sqr(h/2.));
@@ -315,9 +358,7 @@ void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struc
                         for(unsigned j = 0; j < w * h; j++) {
                                 aux->fista[j] = aux->fdata[j] + factor * (aux->fdata[j] - aux->fista[j]);
                         }
-                        float *f = aux->fdata;
-                        aux->fdata = aux->fista;
-                        aux->fista = f;
+                        SWAP(float *, aux->fdata, aux->fista);
                 }
                 t = tnext;
 
@@ -326,8 +367,7 @@ void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struc
                 #pragma omp parallel for schedule(dynamic)
                 #endif
                 for(unsigned c = 0; c < ncoef; c++) {
-                        struct compute_aux *aux = &auxs[c];
-                        compute_projection(w, h, aux->fdata, aux->temp[0], aux->cos, aux->q_min, aux->q_max);
+                        compute_projection(w, h, &auxs[c], &coefs[c]);
                 }
                 if(pb) {
                         #ifdef USE_OPENMP
@@ -340,7 +380,9 @@ void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struc
         for(unsigned c = 0; c < ncoef; c++) {
                 struct compute_aux *aux = &auxs[c];
                 struct coef *coef = &coefs[c];
-                coef->fdata = aux->fdata;
+                SWAP(float *, aux->fdata, coef->fdata);
+                coef->w = w;
+                coef->h = h;
                 compute_aux_destroy(aux);
         }
         free(auxs);

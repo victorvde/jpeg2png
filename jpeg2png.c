@@ -13,7 +13,6 @@
 #include "jpeg.h"
 #include "png.h"
 #include "box.h"
-#include "upsample.h"
 #include "compute.h"
 #include "logger.h"
 #include "progressbar.h"
@@ -232,10 +231,6 @@ int main(int argc, const char **argv) {
         struct coef *coef = &jpeg.coefs[0];
         for(unsigned i = 0; i < coef->h * coef->w; i++) {
                 coef->fdata[i] += 128.;
-        }
-
-        for(unsigned i = 0; i < 3; i++) {
-                upsample(&jpeg.coefs[i], jpeg.w, jpeg.h);
         }
 
         write_png(out, jpeg.w, jpeg.h, png_bits, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);

@@ -351,7 +351,6 @@ void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struc
                 compute_aux_init(w, h, &coefs[c], &auxs[c]);
         }
 
-        // float radius = sqrt(sqr(w/2.) + sqr(h/2.));
         float radius = sqrt(w*h) / 2;
         float t = 1;
         for(unsigned i = 0; i < iterations; i++) {

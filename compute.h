@@ -5,6 +5,6 @@
 #include "logger.h"
 #include "progressbar.h"
 
-void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struct progressbar *pb, float weight[ncoef], float pweight[ncoef], unsigned iterations);
+void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log, struct progressbar *pb, float weight[nchannel], float pweight[nchannel], unsigned iterations);
 
 #endif

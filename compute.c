@@ -9,7 +9,7 @@
 
 #include "ooura/dct.h"
 
-struct compute_aux {
+struct aux {
         float *cos;
         float *obj_gradient;
         float *temp[2];
@@ -51,17 +51,17 @@ static double compute_step_prob(unsigned w, unsigned h, float alpha, struct coef
         return prob_dist;
 }
 
-static double compute_step_tv_c(unsigned w, unsigned h, unsigned ncoef, struct compute_aux auxs[ncoef]) {
+static double compute_step_tv_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
         struct deriv {float g_x; float g_y;};
 
         double tv = 0.;
         struct deriv derivs[3];
-        ASSUME(ncoef <= 3);
+        ASSUME(nchannel <= 3);
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
-                        for(unsigned c = 0; c < ncoef; c++) {
+                        for(unsigned c = 0; c < nchannel; c++) {
                                 struct deriv *deriv = &derivs[c];
-                                struct compute_aux *aux = &auxs[c];
+                                struct aux *aux = &auxs[c];
                                 // forward gradient x
                                 deriv->g_x = x >= w-1 ? 0. : *p(aux->fdata, x+1, y, w, h) - *p(aux->fdata, x, y, w, h);
                                 // forward gradient y
@@ -69,19 +69,19 @@ static double compute_step_tv_c(unsigned w, unsigned h, unsigned ncoef, struct c
                         }
                         // norm
                         float g_norm = 0.;
-                        for(unsigned c = 0; c < ncoef; c++) {
+                        for(unsigned c = 0; c < nchannel; c++) {
                                 struct deriv *deriv = &derivs[c];
                                 g_norm += sqr(deriv->g_x);
                                 g_norm += sqr(deriv->g_y);
                         }
                         g_norm = sqrt(g_norm);
-                        float alpha = 1./sqrt(ncoef);
+                        float alpha = 1./sqrt(nchannel);
                         tv += alpha * g_norm;
                         // compute derivatives
-                        for(unsigned c = 0; c < ncoef; c++) {
+                        for(unsigned c = 0; c < nchannel; c++) {
                                 float g_x = derivs[c].g_x;
                                 float g_y = derivs[c].g_y;
-                                struct compute_aux *aux = &auxs[c];
+                                struct aux *aux = &auxs[c];
                                 if(g_norm != 0) {
                                         *p(aux->obj_gradient, x, y, w, h) += alpha * -(g_x + g_y) / g_norm;
                                         if(x < w-1) {
@@ -102,14 +102,14 @@ static double compute_step_tv_c(unsigned w, unsigned h, unsigned ncoef, struct c
 #ifdef USE_SIMD
 #include "compute_simd_step.c"
 #endif
-static double compute_step_tv(unsigned w, unsigned h, unsigned ncoef, struct compute_aux auxs[ncoef]) {
+static double compute_step_tv(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
 #ifdef USE_SIMD
-        if(ncoef == 1) {
-                struct compute_aux *aux = &auxs[0];
+        if(nchannel == 1) {
+                struct aux *aux = &auxs[0];
                 return compute_step_tv_simd(w, h, aux->fdata, aux->obj_gradient, aux->temp[0], aux->temp[1]);
         }
 #endif
-        return compute_step_tv_c(w, h, ncoef, auxs);
+        return compute_step_tv_c(w, h, nchannel, auxs);
 }
 
 static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, float *in_x, float *in_y, float alpha) {
@@ -158,9 +158,9 @@ static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, floa
 
 static double compute_step(
         unsigned w, unsigned h,
-        unsigned ncoef,
-        struct coef coefs[ncoef], struct compute_aux auxs[ncoef],
-        float step_size, float weight[ncoef], float pweight[ncoef],
+        unsigned nchannel,
+        struct coef coefs[nchannel], struct aux auxs[nchannel],
+        float step_size, float weight[nchannel], float pweight[nchannel],
         struct logger *log)
 {
         float total_alpha = 0.;
@@ -169,8 +169,8 @@ static double compute_step(
         #ifdef USE_OPENMP
         #pragma omp parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:prob_dist)
         #endif
-        for(unsigned c = 0; c < ncoef; c++) {
-                struct compute_aux *aux = &auxs[c];
+        for(unsigned c = 0; c < nchannel; c++) {
+                struct aux *aux = &auxs[c];
                 struct coef *coef = &coefs[c];
 
                 // initialize gradient
@@ -187,16 +187,16 @@ static double compute_step(
         }
 
         // TV
-        total_alpha += ncoef;
-        double tv = compute_step_tv(w, h, ncoef, auxs);
+        total_alpha += nchannel;
+        double tv = compute_step_tv(w, h, nchannel, auxs);
 
         double tv2 = 0.;
         #ifdef USE_OPENMP
         #pragma omp parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:tv2)
         #endif
-        for(unsigned c = 0; c < ncoef; c++) {
+        for(unsigned c = 0; c < nchannel; c++) {
                 // TVG second order
-                struct compute_aux *aux = &auxs[c];
+                struct aux *aux = &auxs[c];
 
                 if(weight[c] != 0) {
                         float alpha = weight[c] / sqrt(4. / 2.);
@@ -222,7 +222,7 @@ static double compute_step(
         return objective;
 }
 
-static void compute_aux_init(unsigned w, unsigned h, struct coef *coef, struct compute_aux *aux) {
+static void aux_init(unsigned w, unsigned h, struct coef *coef, struct aux *aux) {
         float *cos = alloc_real(coef->h * coef->w);
         unsigned blocks = (coef->h / 8) * (coef->w / 8);
         for(unsigned i = 0; i < blocks; i++) {
@@ -254,7 +254,7 @@ static void compute_aux_init(unsigned w, unsigned h, struct coef *coef, struct c
         aux->fista = fista;
 }
 
-static void compute_aux_destroy(struct compute_aux *aux) {
+static void aux_destroy(struct aux *aux) {
         free_real(aux->cos);
         for(unsigned i = 0; i < 2; i++) {
                 free_real(aux->temp[i]);
@@ -264,7 +264,7 @@ static void compute_aux_destroy(struct compute_aux *aux) {
         free_real(aux->fista);
 }
 
-static void compute_projection(unsigned w, unsigned h, struct compute_aux *aux, struct coef *coef) {
+static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct coef *coef) {
         unsigned blocks = (coef->h / 8) * (coef->w / 8);
         float *subsampled;
         float *boxed = aux->temp[0];
@@ -338,17 +338,17 @@ static void compute_projection(unsigned w, unsigned h, struct compute_aux *aux, 
         }
 }
 
-void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struct progressbar *pb, float weight[ncoef], float pweight[ncoef], unsigned iterations) {
+void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log, struct progressbar *pb, float weight[nchannel], float pweight[nchannel], unsigned iterations) {
         unsigned h = 0;
         unsigned w = 0;
-        for(unsigned c = 0; c < ncoef; c++) {
+        for(unsigned c = 0; c < nchannel; c++) {
                 struct coef *coef = &coefs[c];
                 w = MAX(w, coef->w * coef->w_samp);
                 h = MAX(h, coef->h * coef->h_samp);
         }
-        struct compute_aux *auxs = malloc(sizeof(*auxs) * ncoef);
-        for(unsigned c = 0; c < ncoef; c++) {
-                compute_aux_init(w, h, &coefs[c], &auxs[c]);
+        struct aux *auxs = malloc(sizeof(*auxs) * nchannel);
+        for(unsigned c = 0; c < nchannel; c++) {
+                aux_init(w, h, &coefs[c], &auxs[c]);
         }
 
         float radius = sqrt(w*h) / 2;
@@ -358,8 +358,8 @@ void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struc
 
                 float tnext = (1 + sqrt(1 + 4 * sqr(t))) / 2;
                 float factor = (t - 1) / tnext;
-                for(unsigned c = 0; c < ncoef; c++) {
-                        struct compute_aux *aux = &auxs[c];
+                for(unsigned c = 0; c < nchannel; c++) {
+                        struct aux *aux = &auxs[c];
                         for(unsigned j = 0; j < w * h; j++) {
                                 aux->fista[j] = aux->fdata[j] + factor * (aux->fdata[j] - aux->fista[j]);
                         }
@@ -367,11 +367,11 @@ void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struc
                 }
                 t = tnext;
 
-                compute_step(w, h, ncoef, coefs, auxs, radius / sqrt(1 + iterations), weight, pweight, log);
+                compute_step(w, h, nchannel, coefs, auxs, radius / sqrt(1 + iterations), weight, pweight, log);
                 #ifdef USE_OPENMP
                 #pragma omp parallel for schedule(dynamic)
                 #endif
-                for(unsigned c = 0; c < ncoef; c++) {
+                for(unsigned c = 0; c < nchannel; c++) {
                         compute_projection(w, h, &auxs[c], &coefs[c]);
                 }
                 if(pb) {
@@ -382,13 +382,13 @@ void compute(unsigned ncoef, struct coef coefs[ncoef], struct logger *log, struc
                 }
         }
 
-        for(unsigned c = 0; c < ncoef; c++) {
-                struct compute_aux *aux = &auxs[c];
+        for(unsigned c = 0; c < nchannel; c++) {
+                struct aux *aux = &auxs[c];
                 struct coef *coef = &coefs[c];
                 SWAP(float *, aux->fdata, coef->fdata);
                 coef->w = w;
                 coef->h = h;
-                compute_aux_destroy(aux);
+                aux_destroy(aux);
         }
         free(auxs);
 }

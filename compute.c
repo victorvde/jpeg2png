@@ -18,26 +18,32 @@ struct compute_aux {
 };
 
 // Note: destroys cos
-static double compute_step_prob(unsigned w, unsigned h, int16_t *data, float alpha, uint16_t quant_table[64], float *cos, float *obj_gradient) {
+static double compute_step_prob(unsigned w, unsigned h, float alpha, struct coef *coef, float *cos, float *obj_gradient) {
         double prob_dist = 0.;
-        unsigned block_w = w / 8;
-        unsigned block_h = h / 8;
+        unsigned block_w = coef->w / 8;
+        unsigned block_h = coef->h / 8;
         for(unsigned block_y = 0; block_y < block_h; block_y++) {
                 for(unsigned block_x = 0; block_x < block_w; block_x++) {
                         unsigned i = block_y * block_w + block_x;
                         float *cosb = &cos[i*64];
                         for(unsigned j = 0; j < 64; j++) {
-                                cosb[j] -= (float)data[i*64+j] * quant_table[j];
-                                prob_dist += 0.5 * sqr(cosb[j] / quant_table[j]);
-                                cosb[j] = cosb[j] / sqr((float)quant_table[j]);
+                                cosb[j] -= (float)coef->data[i*64+j] * coef->quant_table[j];
+                                prob_dist += 0.5 * sqr(cosb[j] / coef->quant_table[j]);
+                                cosb[j] = cosb[j] / sqr((float)coef->quant_table[j]);
                         }
                         idct8x8s(cosb);
                         for(unsigned in_y = 0; in_y < 8; in_y++) {
                                 for(unsigned in_x = 0; in_x < 8; in_x++) {
                                         unsigned j = in_y * 8 + in_x;
-                                        unsigned x = block_x * 8 + in_x;
-                                        unsigned y = block_y * 8 + in_y;
-                                        *p(obj_gradient, x, y, w, h) += alpha * cosb[j];
+                                        unsigned cx = block_x * 8 + in_x;
+                                        unsigned cy = block_y * 8 + in_y;
+                                        for(unsigned sy = 0; sy < coef->h_samp; sy++) {
+                                                for(unsigned sx = 0; sx < coef->w_samp; sx++) {
+                                                        unsigned y = cy * coef->h_samp + sy;
+                                                        unsigned x = cx * coef->w_samp + sx;
+                                                        *p(obj_gradient, x, y, w, h) += alpha * cosb[j];
+                                                }
+                                        }
                                 }
                         }
                 }
@@ -176,7 +182,7 @@ static double compute_step(
                 if(pweight[c] !=  0.) {
                         float p_alpha = pweight[c] * 2. * 255. * sqrt(2.);
                         total_alpha += p_alpha;
-                        prob_dist += p_alpha * compute_step_prob(w, h, coef->data, p_alpha, coef->quant_table, aux->cos, aux->obj_gradient);
+                        prob_dist += p_alpha * compute_step_prob(w, h, p_alpha, coef, aux->cos, aux->obj_gradient);
                 }
         }
 

@@ -24,3 +24,7 @@ gopt/gopt.o: gopt/gopt.c gopt/gopt.h
 
 %.o: %.c
 	$(CC) -MP -MMD $< -c -o $@ $(CFLAGS) $(BFLAGS) $(WARN_FLAGS)
+
+.PHONY: clean
+clean:
+	git clean -Xf

@@ -55,7 +55,8 @@ static double compute_step_tv_c(unsigned w, unsigned h, unsigned ncoef, struct c
         struct deriv {float g_x; float g_y;};
 
         double tv = 0.;
-        struct deriv *derivs = malloc(sizeof(*derivs) * ncoef);
+        struct deriv derivs[3];
+        ASSUME(ncoef <= 3);
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
                         for(unsigned c = 0; c < ncoef; c++) {
@@ -95,7 +96,6 @@ static double compute_step_tv_c(unsigned w, unsigned h, unsigned ncoef, struct c
                         }
                 }
         }
-        free(derivs);
         return tv;
 }
 

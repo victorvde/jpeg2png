@@ -2,9 +2,7 @@
 ## Silky smooth JPEG decoding - no more artifacts!
 JPEG encoding loses information. But it is JPEG decoding that introduces artifacts by filling the missing information with noise.
 
-jpeg2png is smarter and fills the missing information to create the smoothest possible picture. Just do
-
-``$ jpeg2png input.jpg output.png``
+jpeg2png is smarter and fills the missing information to create the smoothest possible picture.
 
 ## [Examples](/../../tree/images)
 
@@ -21,6 +19,12 @@ jpeg2png is smarter and fills the missing information to create the smoothest po
 * Top right: original, 64x64 detail
 * Bottom left: [JPEG encoded](../images/deviantart.jpg) at 90% quality with 4:4:4 chroma subsampling using the GIMP, 64x64 detail
 * Bottom right: [JPEG decoded](../images/deviantart_restored.png) with jpeg2png using the default settings, 64x64 detail
+
+## Usage
+
+Just execute ``jpeg2png picture.jpg`` to create ``picture.png``. Execute ``jpeg2png --help`` to see all options.
+
+Under Windows, you can also drag-and-drop JPEG files onto the program.
 
 ## Availability
 

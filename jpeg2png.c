@@ -17,7 +17,7 @@
 #include "logger.h"
 #include "progressbar.h"
 
-#define JPEG2PNG_VERSION "0.3"
+#define JPEG2PNG_VERSION "0.4"
 static const float default_weight = 0.3;
 static const float default_pweight = 0.001;
 static const unsigned default_iterations = 50;

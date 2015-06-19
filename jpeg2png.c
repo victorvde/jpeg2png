@@ -24,8 +24,21 @@ static const unsigned default_iterations = 50;
 
 noreturn static void usage() {
         printf(
-                "usage: jpeg2png in.jpg out.png [flags...]\n"
+                "usage: jpeg2png picture.jpg ... [-o picture.png] ... [flags...]\n"
                 "\n"
+                "-o picture.png\n"
+                "--output picture.png\n"
+                "\tpicture.png is the file name of the output file\n"
+                "\tthe output file will be overwritten if this flag is used\n"
+                "\tmust be specified either zero times or once for every input file\n"
+                "\tdefault value: original file name with the extension .png\n"
+                "\n");
+        printf(
+                "-f\n"
+                "--force\n"
+                "\toverwrite output files even when not given explicit file names\n"
+                "\n");
+        printf(
                 "-w weight[,weight_cb,weight_cr]\n"
                 "--second-order-weight weight[,weight_cb,weight_cr]\n"
                 "\tweight is a floating point number for TVG weight alpha_1\n"
@@ -34,7 +47,8 @@ noreturn static void usage() {
                 "\ta value of 0.0 means plain Total Variation, and gives a speed boost\n"
                 "\tweights for the chroma components always default to 0.\n"
                 "\tdefault value: %g\n"
-                "\n"
+                "\n", default_weight);
+        printf(
                 "-p pweight[,pweight_cb,pweight_cr]\n"
                 "--probability-weight pweight[,pweight_cb,pweight_cr]\n"
                 "\tpweight is a floating point number for DCT coefficient distance weight\n"
@@ -43,24 +57,28 @@ noreturn static void usage() {
                 "\ta value of 0.0 means to ignore this and gives a speed boost\n"
                 "\tweights for the chroma components default to the luma weight\n"
                 "\tdefault value: %g\n"
-                "\n"
+                "\n", default_pweight);
+        printf(
                 "-i iterations[,iterations_cb,iterations_cr]\n"
                 "--iterations iterations[,iterations_cb,iterations_cr]\n"
                 "\titerations is an integer for the number of optimization steps\n"
                 "\thigher values give better results but take more time\n"
                 "\titerations for the chroma components default to the luma iterations\n"
                 "\tdefault value: %d\n"
-                "\n"
+                "\n", default_iterations);
+        printf(
                 "-q\n"
                 "--quiet\n"
                 "\tdon't show the progress bar\n"
-                "\n"
+                "\n");
+        printf(
                 "-s\n"
                 "--seperate-components\n"
                 "\tseperately optimize components\n"
                 "\tthis is faster and makes multithreading more effective\n"
                 "\thowever the edges of different components can be different\n"
-                "\n"
+                "\n");
+        printf(
                 "-t threads\n"
                 "--threads threads\n"
 #ifndef USE_OPENMP
@@ -70,32 +88,96 @@ noreturn static void usage() {
                 "\tthreads is a positive integer for the maximum number of threads used\n"
                 "\tequivalent to setting the environment variable OMP_NUM_THREADS\n"
                 "\tdefault: number of CPUs\n"
-                "\n"
+                "\n");
+        printf(
                 "-1\n"
                 "--16-bits-png\n"
                 "\toutput PNG with 16 bits color depth instead of the usual 8 bits\n"
                 "\tyou should use a high number of iterations when using this option\n"
-                "\n"
+                "\n");
+        printf(
                 "-c csv_log\n"
                 "--csv_log csv_log\n"
                 "\tcsv_log is a file name for the optimization log\n"
                 "\tdefault: none\n"
-                "\n"
+                "\n");
+        printf(
                 "-h\n"
                 "--help\n"
                 "\tdisplay this help text and exit\n"
-                "\n"
+                "\n");
+        printf(
                 "-V\n"
                 "--version\n"
                 "\tdisplay version information and exit\n"
-                , default_weight, default_pweight, default_iterations);
+                );
         exit(EXIT_FAILURE);
 }
+
+void decode_file(FILE* in, FILE *out, unsigned iterations[3], float weights[3], float pweights[3], unsigned png_bits, bool all_together, bool quiet, struct logger *log) {
+        struct jpeg jpeg;
+        read_jpeg(in, &jpeg);
+        fclose(in);
+        for(unsigned c = 0; c < 3; c++) {
+                struct coef *coef = &jpeg.coefs[c];
+                decode_coefficients(coef);
+        }
+
+        for(unsigned i = 0; i < 3; i++) {
+                struct coef *coef = &jpeg.coefs[i];
+                float *temp = alloc_real(coef->h * coef->w);
+
+                unbox(coef->fdata, temp, coef->w, coef->h);
+
+                free_real(coef->fdata);
+                coef->fdata = temp;
+        }
+
+        struct progressbar pb;
+        if(all_together) {
+                if(!quiet) {
+                        progressbar_start(&pb, iterations[0]);
+                }
+                log->channel = 3;
+                compute(3, jpeg.coefs, log, quiet ? NULL : &pb, weights, pweights, iterations[0]);
+        } else {
+                if(!quiet) {
+                        progressbar_start(&pb, iterations[0] + iterations[1] + iterations[2]);
+                }
+                #ifdef USE_OPENMP
+                #pragma omp parallel for schedule(dynamic) firstprivate(log)
+                #endif
+                for(unsigned i = 0; i < 3; i++) {
+                        log->channel = i;
+                        struct coef *coef = &jpeg.coefs[i];
+                        compute(1, coef, log, quiet ? NULL : &pb, &weights[i], &pweights[i], iterations[i]);
+                }
+        }
+        if(!quiet) {
+                progressbar_done(&pb);
+        }
+
+        struct coef *coef = &jpeg.coefs[0];
+        for(unsigned i = 0; i < coef->h * coef->w; i++) {
+                coef->fdata[i] += 128.;
+        }
+
+        write_png(out, jpeg.w, jpeg.h, png_bits, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);
+        fclose(out);
+
+        for(unsigned i = 0; i < 3; i++) {
+                free_real(jpeg.coefs[i].fdata);
+                free(jpeg.coefs[i].data);
+        }
+}
+
 
 int main(int argc, const char **argv) {
         void *options = gopt_sort(&argc, argv, gopt_start(
                 gopt_option('h', GOPT_NOARG, gopt_shorts('h','?'), gopt_longs("help")),
                 gopt_option('V', GOPT_NOARG, gopt_shorts('V'), gopt_longs("version")),
+                gopt_option('o', GOPT_ARG | GOPT_REPEAT, gopt_shorts('o'), gopt_longs("output")),
+                gopt_option('f', GOPT_NOARG, gopt_shorts('f'), gopt_longs("force")),
                 gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs("csv-log")),
                 gopt_option('t', GOPT_ARG, gopt_shorts('t'), gopt_longs("threads")),
                 gopt_option('q', GOPT_NOARG, gopt_shorts('q'), gopt_longs("quiet")),
@@ -108,7 +190,7 @@ int main(int argc, const char **argv) {
                 printf("jpeg2png version "JPEG2PNG_VERSION" licensed GPLv3+\n");
                 exit(EXIT_FAILURE);
         }
-        if(argc != 3 || gopt(options, 'h')) {
+        if(argc < 2 || gopt(options, 'h')) {
                 usage();
         }
 
@@ -164,11 +246,6 @@ int main(int argc, const char **argv) {
 #endif
         }
 
-        FILE *in = fopen(argv[1], "rb");
-        if(!in) { die_perror("could not open input file `%s`", argv[1]); }
-        FILE *out = fopen(argv[2], "wb");
-        if(!out) { die_perror("could not open output file `%s`", argv[2]); }
-
         FILE *csv_log = NULL;
         if(gopt_arg(options, 'c', &arg_string)) {
                 csv_log = fopen(arg_string, "wb");
@@ -177,67 +254,62 @@ int main(int argc, const char **argv) {
 
         bool quiet = gopt(options, 'q');
         unsigned png_bits = gopt(options, '1') ? 16 : 8;
-
-        gopt_free(options);
-
-        struct jpeg jpeg;
-        read_jpeg(in, &jpeg);
-        fclose(in);
-
-        for(unsigned c = 0; c < 3; c++) {
-                struct coef *coef = &jpeg.coefs[c];
-                decode_coefficients(coef);
-        }
-
-        for(unsigned i = 0; i < 3; i++) {
-                struct coef *coef = &jpeg.coefs[i];
-                float *temp = alloc_real(coef->h * coef->w);
-
-                unbox(coef->fdata, temp, coef->w, coef->h);
-
-                free_real(coef->fdata);
-                coef->fdata = temp;
-        }
+        bool force = gopt(options, 'f');
 
         struct logger log;
         logger_start(&log, csv_log);
-        struct progressbar pb;
-        if(all_together) {
-                if(!quiet) {
-                        progressbar_start(&pb, iterations[0]);
+
+        unsigned nin = argc - 1;
+        unsigned nout = gopt(options, 'o');
+        if(!(nout == 0 || nout == nin)) {
+                die("must give output file names for all input files or none");
+        }
+
+        for(unsigned i = 0; i < nin; i++) {
+                const char *infile = argv[1+i];
+                log.filename = infile;
+
+                char *outfile;
+                if(nout) {
+                        outfile = (char *)gopt_arg_i(options, 'o', i);
+                } else {
+                        unsigned l = strlen(infile);
+                        unsigned e = l;
+                        if(l >= 5 && memcmp(".jpeg", &infile[l-5], 5) == 0) {
+                                e = l-5;
+                        } else if(l >= 4 && memcmp(".jpg", &infile[l-4], 4) == 0) {
+                                e = l-4;
+                        }
+                        outfile = malloc(e + 4 + 1);
+                        if(!outfile) { die("could not allocate outfile"); }
+                        memcpy(outfile, infile, e);
+                        memcpy(outfile+e, ".png", 5);
                 }
-                log.channel = 3;
-                compute(3, jpeg.coefs, &log, quiet ? NULL : &pb, weights, pweights, iterations[0]);
-        } else {
-                if(!quiet) {
-                        progressbar_start(&pb, iterations[0] + iterations[1] + iterations[2]);
+
+                if(!quiet && nin > 1) {
+                        printf("%s\n", infile);
                 }
-                #ifdef USE_OPENMP
-                #pragma omp parallel for schedule(dynamic) firstprivate(log)
-                #endif
-                for(unsigned i = 0; i < 3; i++) {
-                        log.channel = i;
-                        struct coef *coef = &jpeg.coefs[i];
-                        compute(1, coef, &log, quiet ? NULL : &pb, &weights[i], &pweights[i], iterations[i]);
+
+                FILE *in = fopen(infile, "rb");
+                if(!in) { die_perror("could not open input file `%s`", infile); }
+                if(!nout && !force) {
+                        // don't overwrite when not given -o or -f, racy
+                        FILE *outr = fopen(outfile, "rb");
+                        if(outr) { die("not overwriting output file `%s`", outfile); }
+                }
+                FILE *out = fopen(outfile, "wb");
+                if(!out) { die_perror("could not open output file `%s`", outfile); }
+
+                decode_file(in, out, iterations, weights, pweights, png_bits, all_together, quiet, &log);
+
+                if(!nout) {
+                        free(outfile);
                 }
         }
-        if(!quiet) {
-                progressbar_done(&pb);
-        }
+
+        gopt_free(options);
+
         if(csv_log) {
                 fclose(csv_log);
-        }
-
-        struct coef *coef = &jpeg.coefs[0];
-        for(unsigned i = 0; i < coef->h * coef->w; i++) {
-                coef->fdata[i] += 128.;
-        }
-
-        write_png(out, jpeg.w, jpeg.h, png_bits, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);
-        fclose(out);
-
-        for(unsigned i = 0; i < 3; i++) {
-                free_real(jpeg.coefs[i].fdata);
-                free(jpeg.coefs[i].data);
         }
 }

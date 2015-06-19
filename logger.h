@@ -5,6 +5,7 @@
 
 struct logger {
         FILE *f;
+        const char *filename;
         unsigned channel;
         unsigned iteration;
 };

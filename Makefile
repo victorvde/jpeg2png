@@ -1,3 +1,5 @@
+.SUFFIXES:
+
 CC?=gcc
 EXE?=
 CFLAGS+=-std=c11 -pedantic -msse2 -mfpmath=sse
@@ -14,7 +16,7 @@ BFLAGS+=-fopenmp
 LIBS:=-ljpeg -lpng -lm -lz
 OBJS:=jpeg2png.o utils.o jpeg.o png.o box.o compute.o logger.o progressbar.o gopt/gopt.o ooura/dct.o
 
-jpeg2png$(EXE): $(OBJS)
+jpeg2png$(EXE): $(OBJS) $(RES)
 	$(CC) $^ -o $@ $(LDFLAGS) $(BFLAGS) $(LIBS)
 
 -include $(OBJS:.o=.d)

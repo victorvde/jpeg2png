@@ -1,6 +1,11 @@
 CC=i686-w64-mingw32-gcc
 EXE=.exe
+WINDRES=i686-w64-mingw32-windres
 LDFLAGS+=-static
 
-include Makefile
+RES+=icon.rc.o
 
+%.rc.o: %.rc
+	$(WINDRES) $^ $@
+
+include Makefile

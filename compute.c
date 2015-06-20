@@ -165,20 +165,20 @@ static double compute_step(
 {
         float total_alpha = 0.;
 
-        double prob_dist = 0.;
-        #ifdef USE_OPENMP
-        #pragma omp parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:prob_dist)
-        #endif
+        // initialize gradient
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];
-                struct coef *coef = &coefs[c];
 
-                // initialize gradient
                 for(unsigned i = 0; i < h * w; i++) {
                         aux->obj_gradient[i] = 0.;
                 }
+        }
 
-                // DCT coefficent distance
+        // DCT coefficent distance
+        double prob_dist = 0.;
+        for(unsigned c = 0; c < nchannel; c++) {
+                struct aux *aux = &auxs[c];
+                struct coef *coef = &coefs[c];
                 if(pweight[c] !=  0.) {
                         float p_alpha = pweight[c] * 2. * 255. * sqrt(2.);
                         total_alpha += p_alpha;
@@ -190,12 +190,9 @@ static double compute_step(
         total_alpha += nchannel;
         double tv = compute_step_tv(w, h, nchannel, auxs);
 
+        // TVG second order
         double tv2 = 0.;
-        #ifdef USE_OPENMP
-        #pragma omp parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:tv2)
-        #endif
         for(unsigned c = 0; c < nchannel; c++) {
-                // TVG second order
                 struct aux *aux = &auxs[c];
 
                 if(weight[c] != 0) {
@@ -203,8 +200,12 @@ static double compute_step(
                         total_alpha += alpha;
                         tv2 += alpha * compute_step_tv2(w, h, aux->obj_gradient, aux->temp[0], aux->temp[1], alpha);
                 }
+        }
 
-                // do step (normalized)
+        // do step (normalized)
+        for(unsigned c = 0; c < nchannel; c++) {
+                struct aux *aux = &auxs[c];
+
                 float norm = 0.;
                 for(unsigned i = 0; i < h * w; i++) {
                         norm += sqr(aux->obj_gradient[i]);
@@ -368,9 +369,6 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
                 t = tnext;
 
                 compute_step(w, h, nchannel, coefs, auxs, radius / sqrt(1 + iterations), weight, pweight, log);
-                #ifdef USE_OPENMP
-                #pragma omp parallel for schedule(dynamic)
-                #endif
                 for(unsigned c = 0; c < nchannel; c++) {
                         compute_projection(w, h, &auxs[c], &coefs[c]);
                 }

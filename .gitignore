@@ -3,8 +3,4 @@
 *.s
 *.d
 *.exe
-
-*.png
-*.jpg
-
 jpeg2png

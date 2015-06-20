@@ -6,7 +6,6 @@ $(foreach var,$(filter-out .% MAKE% SUFFIXES,$(.VARIABLES)),$(if $(findstring $(
 # Build options
 SSE2?=1
 BUILTINS?=1
-SIMD?=1
 OPENMP?=1
 DEBUG?=0
 SAVE_ASM?=0
@@ -26,10 +25,6 @@ endif
 
 ifeq ($(BUILTINS),1)
 CFLAGS+=-DBUILTIN_UNREACHABLE -DBUILTIN_ASSUME_ALIGNED -DATTRIBUTE_UNUSED
-endif
-
-ifeq ($(SIMD),1)
-CFLAGS+=-DUSE_SIMD
 endif
 
 ifeq ($(OPENMP),1)

@@ -51,7 +51,7 @@ static double compute_step_prob(unsigned w, unsigned h, float alpha, struct coef
         return prob_dist;
 }
 
-static double compute_step_tv_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
+static double compute_step_tv(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
         struct deriv {float g_x; float g_y;};
 
         double tv = 0.;
@@ -97,19 +97,6 @@ static double compute_step_tv_c(unsigned w, unsigned h, unsigned nchannel, struc
                 }
         }
         return tv;
-}
-
-#ifdef USE_SIMD
-#include "compute_simd_step.c"
-#endif
-static double compute_step_tv(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
-#ifdef USE_SIMD
-        if(nchannel == 1) {
-                struct aux *aux = &auxs[0];
-                return compute_step_tv_simd(w, h, aux->fdata, aux->obj_gradient, aux->temp[0], aux->temp[1]);
-        }
-#endif
-        return compute_step_tv_c(w, h, nchannel, auxs);
 }
 
 static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, float *in_x, float *in_y, float alpha) {

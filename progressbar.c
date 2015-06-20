@@ -22,7 +22,7 @@ static void progressbar_show(struct progressbar *pb) {
         for(unsigned i = 0; i < progressbar_width - to_print; i++) {
                 printf(" ");
         }
-        printf("] %3d%%", percentage);
+        printf("] %3u%%", percentage);
         fflush(stdout);
 }
 

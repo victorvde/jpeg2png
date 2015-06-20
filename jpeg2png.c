@@ -296,6 +296,7 @@ int main(int argc, const char **argv) {
                         // don't overwrite when not given -o or -f, racy
                         FILE *outr = fopen(outfile, "rb");
                         if(outr) { die("not overwriting output file `%s`", outfile); }
+                        fclose(outr);
                 }
                 FILE *out = fopen(outfile, "wb");
                 if(!out) { die_perror("could not open output file `%s`", outfile); }

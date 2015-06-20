@@ -20,7 +20,7 @@ void logger_log(struct logger *log, double objective, double prob_dist, double t
 #ifdef USE_OPENMP
         #pragma omp critical(write_log)
 #endif
-                if(fprintf(log->f, "%s,%d,%d,%f,%f,%f,%f\n", log->filename, log->channel, log->iteration, objective, prob_dist, tv, tv2) < 0)
+                if(fprintf(log->f, "%s,%u,%u,%f,%f,%f,%f\n", log->filename, log->channel, log->iteration, objective, prob_dist, tv, tv2) < 0)
                 {
                         die_perror("could not write to csv log");
                 }

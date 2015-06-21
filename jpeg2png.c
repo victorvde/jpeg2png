@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdnoreturn.h>
-#ifdef USE_OPENMP
+#ifdef _OPENMP
 #include <omp.h>
 #endif
 
@@ -81,7 +81,7 @@ noreturn static void usage() {
         printf(
                 "-t threads\n"
                 "--threads threads\n"
-#ifndef USE_OPENMP
+#ifndef _OPENMP
                 "\t*this version was compiled without support for threads*\n"
                 "\n"
 #endif
@@ -222,7 +222,7 @@ int main(int argc, const char **argv) {
         }
 
         if(gopt_arg(options, 't', &arg_string)) {
-#ifdef USE_OPENMP
+#ifdef _OPENMP
                 unsigned threads;
                 int n = sscanf(arg_string, "%u", &threads);
                 if(n != 1 || threads == 0) {

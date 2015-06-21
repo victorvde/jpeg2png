@@ -33,7 +33,6 @@ CFLAGS+=-DUSE_SIMD
 endif
 
 ifeq ($(OPENMP),1)
-CFLAGS+=-DUSE_OPENMP
 BFLAGS+=-fopenmp
 endif
 

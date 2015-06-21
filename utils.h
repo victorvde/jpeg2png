@@ -39,7 +39,7 @@ void compare(const char *name, unsigned w, unsigned h, float *new, float *old);
 #endif
 
 #define STRINGIFY(x) #x
-#ifdef USE_OPENMP
+#ifdef _OPENMP
 #define OPENMP(x) _Pragma(STRINGIFY(omp x))
 #else
 #define OPENMP(x)

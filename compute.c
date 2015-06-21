@@ -18,7 +18,7 @@ struct aux {
 };
 
 // Note: destroys cos
-static double compute_step_prob(unsigned w, unsigned h, float alpha, struct coef *coef, float *cos, float *obj_gradient) {
+POSSIBLY_UNUSED static double compute_step_prob_c(unsigned w, unsigned h, float alpha, struct coef *coef, float *cos, float *obj_gradient) {
         double prob_dist = 0.;
         unsigned block_w = coef->w / 8;
         unsigned block_h = coef->h / 8;
@@ -99,19 +99,6 @@ static double compute_step_tv_c(unsigned w, unsigned h, unsigned nchannel, struc
         return tv;
 }
 
-#ifdef USE_SIMD
-#include "compute_simd_step.c"
-#endif
-static double compute_step_tv(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
-#ifdef USE_SIMD
-        if(nchannel == 1) {
-                struct aux *aux = &auxs[0];
-                return compute_step_tv_simd(w, h, aux->fdata, aux->obj_gradient, aux->temp[0], aux->temp[1]);
-        }
-#endif
-        return compute_step_tv_c(w, h, nchannel, auxs);
-}
-
 static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, float *in_x, float *in_y, float alpha) {
         double tv2 = 0.;
         for(unsigned y = 0; y < h; y++) {
@@ -156,6 +143,10 @@ static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, floa
         return tv2;
 }
 
+#ifdef USE_SIMD
+#include "compute_simd_step.c"
+#endif
+
 static double compute_step(
         unsigned w, unsigned h,
         unsigned nchannel,
@@ -180,13 +171,13 @@ static double compute_step(
                 if(pweight[c] !=  0.) {
                         float p_alpha = pweight[c] * 2. * 255. * sqrt(2.);
                         total_alpha += p_alpha;
-                        prob_dist += p_alpha * compute_step_prob(w, h, p_alpha, coef, aux->cos, aux->obj_gradient);
+                        prob_dist += p_alpha * POSSIBLY_SIMD(compute_step_prob)(w, h, p_alpha, coef, aux->cos, aux->obj_gradient);
                 }
         }
 
         // TV
         total_alpha += nchannel;
-        double tv = compute_step_tv(w, h, nchannel, auxs);
+        double tv = POSSIBLY_SIMD(compute_step_tv)(w, h, nchannel, auxs);
 
         double tv2 = 0.;
         OPENMP(parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:tv2))

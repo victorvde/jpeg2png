@@ -2,7 +2,67 @@
 #include <math.h>
 #include "utils.h"
 
-static double compute_step_tv_simd(unsigned w, unsigned h, float *in, float *objective_gradient, float *in_x, float *in_y)  {
+static double compute_step_prob_simd(unsigned w, unsigned h, float alpha, struct coef *coef, float *cos, float *obj_gradient) {
+        double prob_dist = 0.;
+        unsigned block_w = coef->w / 8;
+        unsigned block_h = coef->h / 8;
+        for(unsigned block_y = 0; block_y < block_h; block_y++) {
+                for(unsigned block_x = 0; block_x < block_w; block_x++) {
+                        unsigned i = block_y * block_w + block_x;
+                        float *cosb = &cos[i*64];
+                        for(unsigned j = 0; j < 64; j+=4) {
+                                __m128 coef_data = _mm_cvtpi16_ps(*(__m64 *)&(coef->data[i*64+j]));
+                                __m128 coef_quant_table = _mm_cvtpi16_ps(*(__m64 *)&(coef->quant_table[j]));
+                                _mm_empty();
+
+                                __m128 cosb_j = _mm_load_ps(&cosb[j]);
+                                cosb_j = cosb_j - coef_data * coef_quant_table;
+                                __m128 dist = SQR(cosb_j / coef_quant_table);
+                                prob_dist += dist[0];
+                                prob_dist += dist[1];
+                                prob_dist += dist[2];
+                                prob_dist += dist[3];
+                                cosb_j = cosb_j / SQR(coef_quant_table);
+                                _mm_store_ps(&cosb[j], cosb_j);
+                        }
+                        idct8x8s(cosb);
+                        if(coef->w_samp > 1 || coef->h_samp > 1) {
+                                 for(unsigned in_y = 0; in_y < 8; in_y++) {
+                                        for(unsigned in_x = 0; in_x < 8; in_x++) {
+                                                unsigned j = in_y * 8 + in_x;
+                                                unsigned cx = block_x * 8 + in_x;
+                                                unsigned cy = block_y * 8 + in_y;
+                                                for(unsigned sy = 0; sy < coef->h_samp; sy++) {
+                                                        for(unsigned sx = 0; sx < coef->w_samp; sx++) {
+                                                                unsigned y = cy * coef->h_samp + sy;
+                                                                unsigned x = cx * coef->w_samp + sx;
+                                                                *p(obj_gradient, x, y, w, h) += alpha * cosb[j];
+                                                        }
+                                                }
+                                        }
+                                }
+                        } else {
+                                __m128 malpha = _mm_set_ps1(alpha);
+                                for(unsigned j = 0; j < 64; j+=4) {
+                                        unsigned in_y = j / 8;
+                                        unsigned in_x = j % 8;
+                                        unsigned x = block_x * 8 + in_x;
+                                        unsigned y = block_y * 8 + in_y;
+                                        __m128 obj = _mm_load_ps(&obj_gradient[y*w+x]);
+                                        __m128 cosb_j = _mm_load_ps(&cosb[j]);
+                                        obj += malpha * cosb_j;
+                                        _mm_store_ps(&obj_gradient[y*w+x], obj);
+                                }
+                        }
+                }
+        }
+        return 0.5 * prob_dist;
+}
+
+static double compute_step_tv_simd(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
+        return compute_step_tv_c(w, h, nchannel, auxs);
+}
+/*
         ASSUME_ALIGNED(in);
         ASSUME_ALIGNED(objective_gradient);
         ASSUME_ALIGNED(in_x);
@@ -112,3 +172,4 @@ static double compute_step_tv_simd(unsigned w, unsigned h, float *in, float *obj
         *p(in_y, w-1, h-1, w, h) = 0.;
         return tv;
 }
+*/

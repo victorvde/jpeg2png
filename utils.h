@@ -19,8 +19,14 @@ void compare(const char *name, unsigned w, unsigned h, float *new, float *old);
 #define MAX(a, b)  (((a) > (b)) ? (a) : (b))
 #define CLAMP(x, low, high) (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 #define DUMP(v, f) do { printf( #v " = " f "\n", v); } while(false)
-#define DUMP_SIMD(r) do { __m128 _t = r; printf( #r " = %.9e,%.9e,%.9e,%.9e\n", _t[0], _t[1], _t[2], _t[3]); } while(false)
+#define DUMP_SIMD(r) do { __m128 _t = r; _mm_empty(); printf( #r " = %.9e,%.9e,%.9e,%.9e\n", _t[0], _t[1], _t[2], _t[3]); } while(false)
 #define SWAP(type, x, y) do { type _t = x; x = y; y = _t; } while(false)
+
+#ifdef USE_SIMD
+#define POSSIBLY_SIMD(x) x##_simd
+#else
+#define POSSIBLY_SIMD(x) x##_c
+#endif
 
 #if defined(NDEBUG) && defined(BUILTIN_UNREACHABLE)
   #define ASSUME(x) do { if(!(x)) { __builtin_unreachable(); } } while(false)
@@ -37,6 +43,8 @@ void compare(const char *name, unsigned w, unsigned h, float *new, float *old);
 #else
   #define POSSIBLY_UNUSED
 #endif
+
+#define SQR(x) (x * x)
 
 #define STRINGIFY(x) #x
 #ifdef _OPENMP

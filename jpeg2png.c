@@ -114,7 +114,7 @@ noreturn static void usage() {
         exit(EXIT_FAILURE);
 }
 
-void decode_file(FILE* in, FILE *out, unsigned iterations[3], float weights[3], float pweights[3], unsigned png_bits, bool all_together, bool quiet, struct logger *log) {
+void decode_file(FILE* in, FILE *out, unsigned iterations[3], float weights[3], float pweights[3], unsigned png_bits, bool all_together, struct progressbar *pb, struct logger *log) {
         struct jpeg jpeg;
         read_jpeg(in, &jpeg);
         fclose(in);
@@ -133,26 +133,16 @@ void decode_file(FILE* in, FILE *out, unsigned iterations[3], float weights[3], 
                 coef->fdata = temp;
         }
 
-        struct progressbar pb;
         if(all_together) {
-                if(!quiet) {
-                        progressbar_start(&pb, iterations[0]);
-                }
                 log->channel = 3;
-                compute(3, jpeg.coefs, log, quiet ? NULL : &pb, weights, pweights, iterations[0]);
+                compute(3, jpeg.coefs, log, pb, weights, pweights, iterations[0]);
         } else {
-                if(!quiet) {
-                        progressbar_start(&pb, iterations[0] + iterations[1] + iterations[2]);
-                }
                 OPENMP(parallel for schedule(dynamic) firstprivate(log))
                 for(unsigned i = 0; i < 3; i++) {
                         log->channel = i;
                         struct coef *coef = &jpeg.coefs[i];
-                        compute(1, coef, log, quiet ? NULL : &pb, &weights[i], &pweights[i], iterations[i]);
+                        compute(1, coef, log, pb, &weights[i], &pweights[i], iterations[i]);
                 }
-        }
-        if(!quiet) {
-                progressbar_done(&pb);
         }
 
         struct coef *coef = &jpeg.coefs[0];
@@ -263,14 +253,13 @@ int main(int argc, const char **argv) {
                 die("must give output file names for all input files or none");
         }
 
-        for(unsigned i = 0; i < nin; i++) {
-                const char *infile = argv[1+i];
-                log.filename = infile;
-
-                char *outfile;
-                if(nout) {
-                        outfile = (char *)gopt_arg_i(options, 'o', i);
-                } else {
+        char **outfiles = malloc(sizeof(*outfiles) * nin);
+        if(!outfiles) { die("could not allocate outfiles"); }
+        if(nout) {
+                gopt_args(options, 'o', (const char **)outfiles, nout);
+        } else {
+                for(unsigned i = 0; i < nin; i++) {
+                        const char *infile = argv[1+i];
                         unsigned l = strlen(infile);
                         unsigned e = l;
                         if(l >= 5 && memcmp(".jpeg", &infile[l-5], 5) == 0) {
@@ -278,32 +267,53 @@ int main(int argc, const char **argv) {
                         } else if(l >= 4 && memcmp(".jpg", &infile[l-4], 4) == 0) {
                                 e = l-4;
                         }
-                        outfile = malloc(e + 4 + 1);
+                        char *outfile = malloc(e + 4 + 1);
                         if(!outfile) { die("could not allocate outfile"); }
                         memcpy(outfile, infile, e);
                         memcpy(outfile+e, ".png", 5);
-                }
 
-                if(!quiet && nin > 1) {
-                        printf("%s\n", infile);
+                        if(!nout && !force) {
+                                // don't overwrite when not given -o or -f, racy
+                                FILE *outr = fopen(outfile, "rb");
+                                if(outr) { die("not overwriting output file `%s`", outfile); }
+                        }
+
+                        outfiles[i] = outfile;
+               }
+        }
+
+        struct progressbar pb;
+        if(!quiet) {
+                if(all_together) {
+                        progressbar_start(&pb, nin * iterations[0]);
+                } else {
+                        progressbar_start(&pb, nin * (iterations[0] + iterations[1] + iterations[2]));
                 }
+        }
+
+        OPENMP(parallel for schedule(dynamic) if(nin > 1))
+        for(unsigned i = 0; i < nin; i++) {
+                const char *infile = argv[1+i];
+                const char *outfile = outfiles[i];
+                log.filename = infile;
 
                 FILE *in = fopen(infile, "rb");
                 if(!in) { die_perror("could not open input file `%s`", infile); }
-                if(!nout && !force) {
-                        // don't overwrite when not given -o or -f, racy
-                        FILE *outr = fopen(outfile, "rb");
-                        if(outr) { die("not overwriting output file `%s`", outfile); }
-                        fclose(outr);
-                }
                 FILE *out = fopen(outfile, "wb");
                 if(!out) { die_perror("could not open output file `%s`", outfile); }
 
-                decode_file(in, out, iterations, weights, pweights, png_bits, all_together, quiet, &log);
+                decode_file(in, out, iterations, weights, pweights, png_bits, all_together, quiet ? NULL : &pb, &log);
+        }
 
-                if(!nout) {
-                        free(outfile);
+        if(!nout) {
+                for(unsigned i = 0; i < nin; i++) {
+                        free(outfiles[i]);
                 }
+        }
+        free(outfiles);
+
+        if(!quiet) {
+                progressbar_done(&pb);
         }
 
         gopt_free(options);

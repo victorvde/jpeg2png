@@ -6,6 +6,7 @@ $(foreach var,$(filter-out .% MAKE% SUFFIXES,$(.VARIABLES)),$(if $(findstring $(
 # Build options
 SSE2?=1
 BUILTINS?=1
+LTO?=1
 OPENMP?=1
 DEBUG?=0
 SAVE_ASM?=0
@@ -17,7 +18,7 @@ WARN_FLAGS+=-Wall -Wextra -Winline -Wshadow
 CC?=$(HOST)gcc
 WINDRES?=$(HOST)windres
 LIBS+=-ljpeg -lpng -lm -lz
-OBJS+=jpeg2png.o utils.o jpeg.o png.o box.o compute.o logger.o progressbar.o gopt/gopt.o ooura/dct.o
+OBJS+=jpeg2png.o utils.o jpeg.o png.o compute.o logger.o progressbar.o gopt/gopt.o ooura/dct.o
 
 ifeq ($(SSE2),1)
 CFLAGS+=-msse2 -mfpmath=sse
@@ -25,6 +26,10 @@ endif
 
 ifeq ($(BUILTINS),1)
 CFLAGS+=-DBUILTIN_UNREACHABLE -DBUILTIN_ASSUME_ALIGNED -DATTRIBUTE_UNUSED
+endif
+
+ifeq ($(LTO),1)
+BFLAGS+=-flto
 endif
 
 ifeq ($(OPENMP),1)

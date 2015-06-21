@@ -14,6 +14,7 @@ noreturn void die_perror(const char *msg, ...);
 clock_t start_timer(const char *name);
 void stop_timer(clock_t t, const char *n);
 void compare(const char *name, unsigned w, unsigned h, float *new, float *old);
+float *p(float *in, unsigned x, unsigned y, unsigned w, unsigned h);
 
 #define MIN(a, b)  (((a) < (b)) ? (a) : (b))
 #define MAX(a, b)  (((a) > (b)) ? (a) : (b))
@@ -38,23 +39,8 @@ void compare(const char *name, unsigned w, unsigned h, float *new, float *old);
   #define POSSIBLY_UNUSED
 #endif
 
-
 #define START_TIMER(n) clock_t macro_timer_##n = start_timer(#n);
 #define STOP_TIMER(n) stop_timer(macro_timer_##n, #n);
-
-inline void check(unsigned x, unsigned y, unsigned w, unsigned h) {
-        ASSUME(x < w);
-        ASSUME(y < h);
-        (void) x;
-        (void) y;
-        (void) w;
-        (void) h;
-}
-
-inline float *p(float *in, unsigned x, unsigned y, unsigned w, unsigned h) {
-        check(x, y, w, h);
-        return &in[y * w + x];
-}
 
 inline float sqr(float x) {
         return x * x;

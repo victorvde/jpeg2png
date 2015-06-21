@@ -51,3 +51,20 @@ void compare(const char * name, unsigned w, unsigned h, float *new, float *old) 
                 }
         }
 }
+
+static void check(unsigned x, unsigned y, unsigned w, unsigned h) {
+        ASSUME(x < w);
+        ASSUME(y < h);
+        (void) x;
+        (void) y;
+        (void) w;
+        (void) h;
+}
+
+
+float *p(float *in, unsigned x, unsigned y, unsigned w, unsigned h) {
+        check(x, y, w, h);
+        unsigned i = (y / 8) * (w / 8) + x / 8;
+        unsigned j = 8 * (y % 8) + x % 8;
+        return &in[i * 64 + j];
+}

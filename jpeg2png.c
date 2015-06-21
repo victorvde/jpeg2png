@@ -12,7 +12,6 @@
 #include "utils.h"
 #include "jpeg.h"
 #include "png.h"
-#include "box.h"
 #include "compute.h"
 #include "logger.h"
 #include "progressbar.h"
@@ -121,16 +120,6 @@ void decode_file(FILE* in, FILE *out, unsigned iterations[3], float weights[3], 
         for(unsigned c = 0; c < 3; c++) {
                 struct coef *coef = &jpeg.coefs[c];
                 decode_coefficients(coef);
-        }
-
-        for(unsigned i = 0; i < 3; i++) {
-                struct coef *coef = &jpeg.coefs[i];
-                float *temp = alloc_real(coef->h * coef->w);
-
-                unbox(coef->fdata, temp, coef->w, coef->h);
-
-                free_real(coef->fdata);
-                coef->fdata = temp;
         }
 
         struct progressbar pb;

@@ -1,10 +1,10 @@
+#include <limits.h>
 #include <stdint.h>
 #include <string.h>
 
 #include "jpeg2png.h"
 #include "compute.h"
 #include "utils.h"
-#include "box.h"
 #include "logger.h"
 
 #include "ooura/dct.h"
@@ -51,49 +51,62 @@ static double compute_step_prob(unsigned w, unsigned h, float alpha, struct coef
         return prob_dist;
 }
 
+static void z_order(unsigned w, unsigned h, unsigned i, unsigned *x, unsigned *y) {
+        ASSUME(i < w * h);
+        unsigned block_w = w / 8;
+        unsigned in_x = i % 8;
+        unsigned in_y = (i / 8) % 8;
+        unsigned block_x = (i / 64) % block_w;
+        unsigned block_y = (i / 64) / block_w;
+        *x = block_x * 8 + in_x;
+        *y = block_y * 8 + in_y;
+}
+
 static double compute_step_tv(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
         struct deriv {float g_x; float g_y;};
 
         double tv = 0.;
         struct deriv derivs[3];
         ASSUME(nchannel <= 3);
-        for(unsigned y = 0; y < h; y++) {
-                for(unsigned x = 0; x < w; x++) {
-                        for(unsigned c = 0; c < nchannel; c++) {
-                                struct deriv *deriv = &derivs[c];
-                                struct aux *aux = &auxs[c];
-                                // forward gradient x
-                                deriv->g_x = x >= w-1 ? 0. : *p(aux->fdata, x+1, y, w, h) - *p(aux->fdata, x, y, w, h);
-                                // forward gradient y
-                                deriv->g_y = y >= h-1 ? 0. : *p(aux->fdata, x, y+1, w, h) - *p(aux->fdata, x, y, w, h);
-                        }
-                        // norm
-                        float g_norm = 0.;
-                        for(unsigned c = 0; c < nchannel; c++) {
-                                struct deriv *deriv = &derivs[c];
-                                g_norm += sqr(deriv->g_x);
-                                g_norm += sqr(deriv->g_y);
-                        }
-                        g_norm = sqrt(g_norm);
-                        float alpha = 1./sqrt(nchannel);
-                        tv += alpha * g_norm;
-                        // compute derivatives
-                        for(unsigned c = 0; c < nchannel; c++) {
-                                float g_x = derivs[c].g_x;
-                                float g_y = derivs[c].g_y;
-                                struct aux *aux = &auxs[c];
-                                if(g_norm != 0) {
-                                        *p(aux->obj_gradient, x, y, w, h) += alpha * -(g_x + g_y) / g_norm;
-                                        if(x < w-1) {
-                                                *p(aux->obj_gradient, x+1, y, w, h) += alpha * g_x / g_norm;
-                                        }
-                                        if(y < h-1) {
-                                                *p(aux->obj_gradient, x, y+1, w, h) += alpha * g_y / g_norm;
-                                        }
+        for(unsigned i = 0; i < w * h; i++) {
+                unsigned x;
+                unsigned y;
+                z_order(w, h, i, &x, &y);
+
+                for(unsigned c = 0; c < nchannel; c++) {
+                        struct deriv *deriv = &derivs[c];
+                        struct aux *aux = &auxs[c];
+                        // forward gradient x
+                        deriv->g_x = x >= w-1 ? 0. : *p(aux->fdata, x+1, y, w, h) - *p(aux->fdata, x, y, w, h);
+                        // forward gradient y
+                        deriv->g_y = y >= h-1 ? 0. : *p(aux->fdata, x, y+1, w, h) - *p(aux->fdata, x, y, w, h);
+                }
+                // norm
+                float g_norm = 0.;
+                for(unsigned c = 0; c < nchannel; c++) {
+                        struct deriv *deriv = &derivs[c];
+                        g_norm += sqr(deriv->g_x);
+                        g_norm += sqr(deriv->g_y);
+                }
+                g_norm = sqrt(g_norm);
+                float alpha = 1./sqrt(nchannel);
+                tv += alpha * g_norm;
+                // compute derivatives
+                for(unsigned c = 0; c < nchannel; c++) {
+                        float g_x = derivs[c].g_x;
+                        float g_y = derivs[c].g_y;
+                        struct aux *aux = &auxs[c];
+                        if(g_norm != 0) {
+                                *p(aux->obj_gradient, x, y, w, h) += alpha * -(g_x + g_y) / g_norm;
+                                if(x < w-1) {
+                                        *p(aux->obj_gradient, x+1, y, w, h) += alpha * g_x / g_norm;
                                 }
-                                *p(aux->temp[0], x, y, w, h) = g_x;
-                                *p(aux->temp[1], x, y, w, h) = g_y;
+                                if(y < h-1) {
+                                        *p(aux->obj_gradient, x, y+1, w, h) += alpha * g_y / g_norm;
+                                }
                         }
+                        *p(aux->temp[0], x, y, w, h) = g_x;
+                        *p(aux->temp[1], x, y, w, h) = g_y;
                 }
         }
         return tv;
@@ -255,11 +268,10 @@ static void aux_destroy(struct aux *aux) {
 static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct coef *coef) {
         unsigned blocks = (coef->h / 8) * (coef->w / 8);
         float *subsampled;
-        float *boxed = aux->temp[0];
         bool resample = !(coef->w == w && coef->h == h);
 
         if(resample) {
-                subsampled = aux->temp[1];
+                subsampled = aux->temp[0];
         } else {
                 subsampled = aux->fdata;
         }
@@ -288,27 +300,23 @@ static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct c
                 }
         }
 
-        box(subsampled, boxed, coef->w, coef->h);
-
         for(unsigned i = 0; i < blocks; i++) {
-                dct8x8s(&boxed[i*64]);
+                dct8x8s(&subsampled[i*64]);
         }
 
         for(unsigned i = 0; i < blocks; i++) {
                 for(unsigned j = 0; j < 64; j++) {
                         float min = (coef->data[i*64+j] - 0.5) * coef->quant_table[j];
                         float max = (coef->data[i*64+j] + 0.5) * coef->quant_table[j];
-                        boxed[i*64+j] = CLAMP(boxed[i*64+j], min, max);
+                        subsampled[i*64+j] = CLAMP(subsampled[i*64+j], min, max);
                 }
         }
 
-        memcpy(aux->cos, boxed, coef->w * coef->h * sizeof(float));
+        memcpy(aux->cos, subsampled, coef->w * coef->h * sizeof(float));
 
         for(unsigned i = 0; i < blocks; i++) {
-                idct8x8s(&boxed[i*64]);
+                idct8x8s(&subsampled[i*64]);
         }
-
-        unbox(boxed, subsampled, coef->w, coef->h);
 
         if(resample) {
                 for(unsigned cy = 0; cy < coef->h; cy++) {

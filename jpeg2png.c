@@ -144,9 +144,7 @@ void decode_file(FILE* in, FILE *out, unsigned iterations[3], float weights[3], 
                 if(!quiet) {
                         progressbar_start(&pb, iterations[0] + iterations[1] + iterations[2]);
                 }
-                #ifdef USE_OPENMP
-                #pragma omp parallel for schedule(dynamic) firstprivate(log)
-                #endif
+                OPENMP(parallel for schedule(dynamic) firstprivate(log))
                 for(unsigned i = 0; i < 3; i++) {
                         log->channel = i;
                         struct coef *coef = &jpeg.coefs[i];

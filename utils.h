@@ -38,6 +38,12 @@ void compare(const char *name, unsigned w, unsigned h, float *new, float *old);
   #define POSSIBLY_UNUSED
 #endif
 
+#define STRINGIFY(x) #x
+#ifdef USE_OPENMP
+#define OPENMP(x) _Pragma(STRINGIFY(omp x))
+#else
+#define OPENMP(x)
+#endif
 
 #define START_TIMER(n) clock_t macro_timer_##n = start_timer(#n);
 #define STOP_TIMER(n) stop_timer(macro_timer_##n, #n);

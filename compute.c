@@ -166,9 +166,7 @@ static double compute_step(
         float total_alpha = 0.;
 
         double prob_dist = 0.;
-        #ifdef USE_OPENMP
-        #pragma omp parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:prob_dist)
-        #endif
+        OPENMP(parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:prob_dist))
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];
                 struct coef *coef = &coefs[c];
@@ -191,9 +189,7 @@ static double compute_step(
         double tv = compute_step_tv(w, h, nchannel, auxs);
 
         double tv2 = 0.;
-        #ifdef USE_OPENMP
-        #pragma omp parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:tv2)
-        #endif
+        OPENMP(parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:tv2))
         for(unsigned c = 0; c < nchannel; c++) {
                 // TVG second order
                 struct aux *aux = &auxs[c];
@@ -368,16 +364,12 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
                 t = tnext;
 
                 compute_step(w, h, nchannel, coefs, auxs, radius / sqrt(1 + iterations), weight, pweight, log);
-                #ifdef USE_OPENMP
-                #pragma omp parallel for schedule(dynamic)
-                #endif
+                OPENMP(parallel for schedule(dynamic))
                 for(unsigned c = 0; c < nchannel; c++) {
                         compute_projection(w, h, &auxs[c], &coefs[c]);
                 }
                 if(pb) {
-                        #ifdef USE_OPENMP
-                        #pragma omp critical(progressbar)
-                        #endif
+                        OPENMP(critical(progressbar))
                         progressbar_inc(pb);
                 }
         }

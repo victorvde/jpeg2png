@@ -4,7 +4,6 @@
 #include <assert.h>
 #include <stdnoreturn.h>
 #include <time.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>

@@ -140,21 +140,6 @@ static double compute_step_tv_simd(unsigned w, unsigned h, unsigned nchannel, st
         return tv;
 }
 
-static void compute_do_step_simd(unsigned w, unsigned h, float *fdata, float *obj_gradient, float step_size) {
-        // do step (normalized)
-        double norm = compute_norm(w, h, obj_gradient);
-
-        __m128 mstep_size = _mm_set_ps1(step_size);
-        __m128 mnorm = _mm_set_ps1(norm);
-
-        for(unsigned i = 0; i < h * w; i+=4) {
-                __m128 mdata = _mm_load_ps(&fdata[i]);
-                __m128 mobj_gradient = _mm_load_ps(&obj_gradient[i]);
-                mdata -= mstep_size * (mobj_gradient / mnorm);
-                _mm_store_ps(&fdata[i], mdata);
-        }
-}
-
 static void clamp_dct_simd(struct coef *coef, float *boxed, unsigned blocks) {
         __m128 mhalf = _mm_set_ps1(0.5);
         for(unsigned i = 0; i < blocks; i++) {

@@ -156,9 +156,9 @@ static double compute_norm(unsigned w, unsigned h, float *data) {
         return sqrt(norm);
 }
 
-POSSIBLY_UNUSED static void compute_do_step_c(unsigned w, unsigned h, float *fdata, float *obj_gradient, float step_size) {
+static void compute_do_step(unsigned w, unsigned h, float *fdata, float *obj_gradient, float step_size) {
         // do step (normalized)
-        double norm = compute_norm(w, h, obj_gradient);
+        float norm = compute_norm(w, h, obj_gradient);
 
         for(unsigned i = 0; i < h * w; i++) {
                 fdata[i] = fdata[i] - step_size * (obj_gradient[i] /  norm);
@@ -213,7 +213,8 @@ static double compute_step(
                         tv2 += alpha * compute_step_tv2(w, h, aux->obj_gradient, aux->temp[0], aux->temp[1], alpha);
                 }
 
-                POSSIBLY_SIMD(compute_do_step)(w, h, aux->fdata, aux->obj_gradient, step_size);
+                // do step
+                compute_do_step(w, h, aux->fdata, aux->obj_gradient, step_size);
         }
 
         double objective = (tv + tv2 + prob_dist) / total_alpha;

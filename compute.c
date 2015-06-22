@@ -351,6 +351,8 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
                 w = MAX(w, coef->w * coef->w_samp);
                 h = MAX(h, coef->h * coef->h_samp);
         }
+        ASSUME(w % 8 == 0);
+        ASSUME(h % 8 == 0);
         struct aux *auxs = malloc(sizeof(*auxs) * nchannel);
         for(unsigned c = 0; c < nchannel; c++) {
                 aux_init(w, h, &coefs[c], &auxs[c]);

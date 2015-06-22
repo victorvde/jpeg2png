@@ -80,6 +80,7 @@ inline float *alloc_real(size_t n) {
 #else
         float *f = aligned_alloc(16, n * sizeof(float));
 #endif
+        ASSUME_ALIGNED(f);
         if(!f) { die("allocation error"); }
         return f;
 }

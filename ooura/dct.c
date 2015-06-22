@@ -12,7 +12,10 @@ Modifications:
 double -> float
 double indirection removed
 added named functions instead of sign
+added ASSUME_ALIGNED
 */
+
+#include "../utils.h"
 
 // Cn_kR = sqrt(2.0/n) * cos(pi/2*k/n)
 // Cn_kI = sqrt(2.0/n) * sin(pi/2*k/n)
@@ -29,6 +32,7 @@ added named functions instead of sign
 
 // Normalized 8x8 IDCT
 void idct8x8s(float a[64]) {
+        ASSUME_ALIGNED(a);
         float x0r, x0i, x1r, x1i, x2r, x2i, x3r, x3i;
         float xr, xi;
 
@@ -92,6 +96,7 @@ void idct8x8s(float a[64]) {
 
 // Normalized 8x8 DCT
 void dct8x8s(float a[64]) {
+        ASSUME_ALIGNED(a);
         float x0r, x0i, x1r, x1i, x2r, x2i, x3r, x3i;
         float xr, xi;
 

@@ -154,3 +154,20 @@ static void compute_do_step_simd(unsigned w, unsigned h, float *fdata, float *ob
                 _mm_store_ps(&fdata[i], mdata);
         }
 }
+
+static void clamp_dct_simd(struct coef *coef, float *boxed, unsigned blocks) {
+        __m128 mhalf = _mm_set_ps1(0.5);
+        for(unsigned i = 0; i < blocks; i++) {
+                for(unsigned j = 0; j < 64; j+=4) {
+                        __m128 coef_data = _mm_cvtpi16_ps(*(__m64 *)&(coef->data[i*64+j]));
+                        __m128 coef_quant_table = _mm_cvtpi16_ps(*(__m64 *)&(coef->quant_table[j]));
+
+                        __m128 min = (coef_data - mhalf) * coef_quant_table;
+                        __m128 max = (coef_data + mhalf) * coef_quant_table;
+                        __m128 data = _mm_load_ps(&boxed[i*64+j]);
+                        data =_mm_max_ps(min, _mm_min_ps(max, data));
+                        _mm_store_ps(&boxed[i*64+j], data);
+                }
+        }
+        _mm_empty();
+}

@@ -264,6 +264,16 @@ static void aux_destroy(struct aux *aux) {
         free_real(aux->fista);
 }
 
+POSSIBLY_UNUSED static void clamp_dct_c(struct coef *coef, float *boxed, unsigned blocks) {
+                for(unsigned i = 0; i < blocks; i++) {
+                for(unsigned j = 0; j < 64; j++) {
+                        float min = (coef->data[i*64+j] - 0.5) * coef->quant_table[j];
+                        float max = (coef->data[i*64+j] + 0.5) * coef->quant_table[j];
+                        boxed[i*64+j] = CLAMP(boxed[i*64+j], min, max);
+                }
+        }
+}
+
 static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct coef *coef) {
         unsigned blocks = (coef->h / 8) * (coef->w / 8);
         float *subsampled;
@@ -306,13 +316,7 @@ static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct c
                 dct8x8s(&boxed[i*64]);
         }
 
-        for(unsigned i = 0; i < blocks; i++) {
-                for(unsigned j = 0; j < 64; j++) {
-                        float min = (coef->data[i*64+j] - 0.5) * coef->quant_table[j];
-                        float max = (coef->data[i*64+j] + 0.5) * coef->quant_table[j];
-                        boxed[i*64+j] = CLAMP(boxed[i*64+j], min, max);
-                }
-        }
+        POSSIBLY_SIMD(clamp_dct)(coef, boxed, blocks);
 
         memcpy(aux->cos, boxed, coef->w * coef->h * sizeof(float));
 

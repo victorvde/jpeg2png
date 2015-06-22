@@ -148,6 +148,23 @@ static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, floa
         return tv2;
 }
 
+static double compute_norm(unsigned w, unsigned h, float *data) {
+        double norm = 0.;
+        for(unsigned i = 0; i < h * w; i++) {
+                norm += sqr(data[i]);
+        }
+        return sqrt(norm);
+}
+
+POSSIBLY_UNUSED static void compute_do_step_c(unsigned w, unsigned h, float *fdata, float *obj_gradient, float step_size) {
+        // do step (normalized)
+        double norm = compute_norm(w, h, obj_gradient);
+
+        for(unsigned i = 0; i < h * w; i++) {
+                fdata[i] = fdata[i] - step_size * (obj_gradient[i] /  norm);
+        }
+}
+
 #ifdef USE_SIMD
 #include "compute_simd_step.c"
 #endif
@@ -196,16 +213,7 @@ static double compute_step(
                         tv2 += alpha * compute_step_tv2(w, h, aux->obj_gradient, aux->temp[0], aux->temp[1], alpha);
                 }
 
-                // do step (normalized)
-                double norm = 0.;
-                for(unsigned i = 0; i < h * w; i++) {
-                        norm += sqr(aux->obj_gradient[i]);
-                }
-                norm = sqrt(norm);
-
-                for(unsigned i = 0; i < h * w; i++) {
-                        aux->fdata[i] = aux->fdata[i] - step_size * (aux->obj_gradient[i] /  norm);
-                }
+                POSSIBLY_SIMD(compute_do_step)(w, h, aux->fdata, aux->obj_gradient, step_size);
         }
 
         double objective = (tv + tv2 + prob_dist) / total_alpha;

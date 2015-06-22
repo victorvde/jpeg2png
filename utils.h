@@ -44,7 +44,7 @@ void compare(const char *name, unsigned w, unsigned h, float *new, float *old);
   #define POSSIBLY_UNUSED
 #endif
 
-#define SQR(x) (x * x)
+#define SQR(x) ((x) * (x))
 
 #define STRINGIFY(x) #x
 #ifdef _OPENMP

@@ -135,13 +135,13 @@ void decode_file(FILE* in, FILE *out, unsigned iterations[3], float weights[3], 
 
         if(all_together) {
                 log->channel = 3;
-                compute(3, jpeg.coefs, log, pb, weights, pweights, iterations[0]);
+                compute(3, jpeg.coefs, log, pb, weights[0], pweights, iterations[0]);
         } else {
                 OPENMP(parallel for schedule(dynamic) firstprivate(log))
                 for(unsigned i = 0; i < 3; i++) {
                         log->channel = i;
                         struct coef *coef = &jpeg.coefs[i];
-                        compute(1, coef, log, pb, &weights[i], &pweights[i], iterations[i]);
+                        compute(1, coef, log, pb, weights[i], &pweights[i], iterations[i]);
                 }
         }
 
@@ -188,7 +188,11 @@ int main(int argc, const char **argv) {
         float weights[3] = {default_weight, 0., 0.};
         if(gopt_arg(options, 'w', &arg_string)) {
                 int n = sscanf(arg_string, "%f,%f,%f", &weights[0], &weights[1], &weights[2]);
-                if(n == 3 || n == 1) {
+                if(n == 3) {
+                        if(all_together) {
+                                die("different weights are only possible when using seperated components");
+                        }
+                } else if(n ==1) {
                         // ok
                 } else {
                         die("invalid weight");

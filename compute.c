@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 
 #include "jpeg2png.h"
 #include "compute.h"
@@ -48,7 +49,7 @@ POSSIBLY_UNUSED static double compute_step_prob_c(unsigned w, unsigned h, float 
                         }
                 }
         }
-        return prob_dist;
+        return alpha * prob_dist;
 }
 
 static void compute_step_tv_inner_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], unsigned x, unsigned y, double *tv) {
@@ -104,45 +105,72 @@ POSSIBLY_UNUSED static double compute_step_tv_c(unsigned w, unsigned h, unsigned
         return tv;
 }
 
-static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, float *in_x, float *in_y, float alpha) {
+static void compute_step_tv2_inner_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], float alpha, unsigned x, unsigned y, double *tv2) {
+        float g_xxs[3] = {0};
+        float g_xy_syms[3] = {0};
+        float g_yys[3] = {0};
+
+        for(unsigned c = 0; c < nchannel; c++) {
+                struct aux *aux = &auxs[c];
+
+                // backward x
+                g_xxs[c] = x <= 0 ? 0. : *p(aux->temp[0], x, y, w, h) - *p(aux->temp[0], x-1, y, w, h);
+                // backward x
+                float g_yx = x <= 0 ? 0. : *p(aux->temp[1], x, y, w, h) - *p(aux->temp[1], x-1, y, w, h);
+                // backward y
+                float g_xy = y <= 0 ? 0. : *p(aux->temp[0], x, y, w, h) - *p(aux->temp[0], x, y-1, w, h);
+                // backward y
+                g_yys[c] = y <= 0 ? 0. : *p(aux->temp[1], x, y, w, h) - *p(aux->temp[1], x, y-1, w, h);
+                // symmetrize
+                g_xy_syms[c] = (g_xy + g_yx) / 2.;
+        }
+        // norm
+        float g2_norm = 0.;
+        for(unsigned c = 0; c < nchannel; c++) {
+                g2_norm += sqr(g_xxs[c]) + 2 * sqr(g_xy_syms[c]) + sqr(g_yys[c]);
+        }
+        g2_norm = sqrt(g2_norm);
+
+        alpha = alpha * 1./sqrt(nchannel);
+        *tv2 += alpha * g2_norm;
+
+        // compute derivatives
+        if(g2_norm != 0.) {
+                for(unsigned c = 0; c < nchannel; c++) {
+                        float g_xx = g_xxs[c];
+                        float g_yy = g_yys[c];
+                        float g_xy_sym = g_xy_syms[c];
+                        struct aux *aux = &auxs[c];
+
+                        *p(aux->obj_gradient, x, y, w, h) += alpha * (-(2. * g_xx + 2. * g_xy_sym + 2. *  g_yy) / g2_norm);
+                        if(x > 0) {
+                                *p(aux->obj_gradient, x-1, y, w, h) += alpha * ((g_xy_sym + g_xx) / g2_norm);
+                        }
+                        if(x < w-1) {
+                                *p(aux->obj_gradient, x+1, y, w, h) += alpha * ((g_xy_sym + g_xx) / g2_norm);
+                        }
+                        if(y > 0) {
+                                *p(aux->obj_gradient, x, y-1, w, h) += alpha * ((g_yy + g_xy_sym) / g2_norm);
+                        }
+                        if(y < h-1) {
+                                *p(aux->obj_gradient, x, y+1, w, h) += alpha * ((g_yy + g_xy_sym) / g2_norm);
+                        }
+                        if(x < w-1 && y > 0) {
+                                *p(aux->obj_gradient, x+1, y-1, w, h) += alpha * ((-g_xy_sym) / g2_norm);
+                        }
+                        if(x > 0 && y < h-1) {
+                                *p(aux->obj_gradient, x-1, y+1, w, h) += alpha * ((-g_xy_sym) / g2_norm);
+                        }
+                }
+        }
+}
+
+
+POSSIBLY_UNUSED static double compute_step_tv2_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], float alpha) {
         double tv2 = 0.;
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
-                        // backward x
-                        float g_xx = x <= 0 ? 0. : *p(in_x, x, y, w, h) - *p(in_x, x-1, y, w, h);
-                        // backward x
-                        float g_yx = x <= 0 ? 0. : *p(in_y, x, y, w, h) - *p(in_y, x-1, y, w, h);
-                        // backward y
-                        float g_xy = y <= 0 ? 0. : *p(in_x, x, y, w, h) - *p(in_x, x, y-1, w, h);
-                        // backward y
-                        float g_yy = y <= 0 ? 0. : *p(in_y, x, y, w, h) - *p(in_y, x, y-1, w, h);
-                        // symmetrize
-                        float g_xy_sym = (g_xy + g_yx) / 2.;
-                        // norm
-                        float g2_norm = sqrt(sqr(g_xx) + 2 * sqr(g_xy_sym) + sqr(g_yy));
-                        tv2 += g2_norm;
-                        // compute derivatives
-                        if(g2_norm != 0.) {
-                                *p(obj_gradient, x, y, w, h) += alpha * (-(2. * g_xx + 2. * g_xy_sym + 2. *  g_yy) / g2_norm);
-                                if(x > 0) {
-                                        *p(obj_gradient, x-1, y, w, h) += alpha * ((g_xy_sym + g_xx) / g2_norm);
-                                }
-                                if(x < w-1) {
-                                        *p(obj_gradient, x+1, y, w, h) += alpha * ((g_xy_sym + g_xx) / g2_norm);
-                                }
-                                if(y > 0) {
-                                        *p(obj_gradient, x, y-1, w, h) += alpha * ((g_yy + g_xy_sym) / g2_norm);
-                                }
-                                if(y < h-1) {
-                                        *p(obj_gradient, x, y+1, w, h) += alpha * ((g_yy + g_xy_sym) / g2_norm);
-                                }
-                                if(x < w-1 && y > 0) {
-                                        *p(obj_gradient, x+1, y-1, w, h) += alpha * ((-g_xy_sym) / g2_norm);
-                                }
-                                if(x > 0 && y < h-1) {
-                                        *p(obj_gradient, x-1, y+1, w, h) += alpha * ((-g_xy_sym) / g2_norm);
-                                }
-                        }
+                        compute_step_tv2_inner_c(w, h, nchannel, auxs, alpha, x, y, &tv2);
                 }
         }
         return tv2;
@@ -173,7 +201,7 @@ static double compute_step(
         unsigned w, unsigned h,
         unsigned nchannel,
         struct coef coefs[nchannel], struct aux auxs[nchannel],
-        float step_size, float weight[nchannel], float pweight[nchannel],
+        float step_size, float weight, float pweight[nchannel],
         struct logger *log)
 {
         float total_alpha = 0.;
@@ -193,7 +221,7 @@ static double compute_step(
                 if(pweight[c] !=  0.) {
                         float p_alpha = pweight[c] * 2. * 255. * sqrt(2.);
                         total_alpha += p_alpha;
-                        prob_dist += p_alpha * POSSIBLY_SIMD(compute_step_prob)(w, h, p_alpha, coef, aux->cos, aux->obj_gradient);
+                        prob_dist += POSSIBLY_SIMD(compute_step_prob)(w, h, p_alpha, coef, aux->cos, aux->obj_gradient);
                 }
         }
 
@@ -201,19 +229,18 @@ static double compute_step(
         total_alpha += nchannel;
         double tv = POSSIBLY_SIMD(compute_step_tv)(w, h, nchannel, auxs);
 
+        // TVG second order
         double tv2 = 0.;
-        OPENMP(parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:tv2))
+        if(weight != 0.) {
+                float alpha = weight / sqrt(4. / 2.);
+                total_alpha += alpha * nchannel;
+                tv2 = compute_step_tv2_c(w, h, nchannel, auxs, alpha);
+        }
+
+        // do step
+        OPENMP(parallel for schedule(dynamic))
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];
-
-                // TVG second order
-                if(weight[c] != 0) {
-                        float alpha = weight[c] / sqrt(4. / 2.);
-                        total_alpha += alpha;
-                        tv2 += alpha * compute_step_tv2(w, h, aux->obj_gradient, aux->temp[0], aux->temp[1], alpha);
-                }
-
-                // do step
                 compute_do_step(w, h, aux->fdata, aux->obj_gradient, step_size);
         }
 
@@ -343,7 +370,7 @@ static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct c
         }
 }
 
-void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log, struct progressbar *pb, float weight[nchannel], float pweight[nchannel], unsigned iterations) {
+void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log, struct progressbar *pb, float weight, float pweight[nchannel], unsigned iterations) {
         unsigned h = 0;
         unsigned w = 0;
         for(unsigned c = 0; c < nchannel; c++) {

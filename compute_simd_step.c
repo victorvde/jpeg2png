@@ -60,8 +60,8 @@ static double compute_step_prob_simd(unsigned w, unsigned h, float alpha, struct
 }
 
 static void compute_step_tv_inner_simd(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], unsigned x, unsigned y, double *tv) {
-        const __m128 mm_inf = _mm_set_ps1(INFINITY);
-        const __m128 mm_zero = _mm_set_ps1(0.);
+        const __m128 minf = _mm_set_ps1(INFINITY);
+        const __m128 mzero = _mm_set_ps1(0.);
 
         __m128 g_xs[3] = {0};
         __m128 g_ys[3] = {0};
@@ -74,7 +74,7 @@ static void compute_step_tv_inner_simd(unsigned w, unsigned h, unsigned nchannel
                 g_ys[c] = _mm_loadu_ps(p(aux->fdata, x, y+1, w, h)) - here;
         }
         // norm
-        __m128 g_norm = mm_zero;
+        __m128 g_norm = mzero;
         for(unsigned c = 0; c < nchannel; c++) {
                 g_norm += SQR(g_xs[c]);
                 g_norm += SQR(g_ys[c]);
@@ -90,7 +90,7 @@ static void compute_step_tv_inner_simd(unsigned w, unsigned h, unsigned nchannel
         __m128 malpha = _mm_set_ps1(alpha);
 
         // set zeroes to infinity
-        g_norm = _mm_or_ps(g_norm, _mm_and_ps(mm_inf, _mm_cmpeq_ps(g_norm, mm_zero)));
+        g_norm = _mm_or_ps(g_norm, _mm_and_ps(minf, _mm_cmpeq_ps(g_norm, mzero)));
 
         // compute derivatives
         for(unsigned c = 0; c < nchannel; c++) {
@@ -100,20 +100,26 @@ static void compute_step_tv_inner_simd(unsigned w, unsigned h, unsigned nchannel
 
                 // NB: for numerical stability and same exact result as the c version,
                 // we must calculate the objective gradient at x+1 before x
-                float *pobj_r = p(aux->obj_gradient, x+1, y, w, h);
-                __m128 obj_r = _mm_loadu_ps(pobj_r);
-                obj_r += malpha * g_x / g_norm;
-                _mm_storeu_ps(pobj_r, obj_r);
+                {
+                        float *pobj_r = p(aux->obj_gradient, x+1, y, w, h);
+                        __m128 obj_r = _mm_loadu_ps(pobj_r);
+                        obj_r += malpha * g_x / g_norm;
+                        _mm_storeu_ps(pobj_r, obj_r);
+                }
 
-                float *pobj = p(aux->obj_gradient, x, y, w, h);
-                __m128 obj = _mm_load_ps(pobj);
-                obj += malpha * -(g_x + g_y) / g_norm;
-                _mm_store_ps(pobj, obj);
+                {
+                        float *pobj = p(aux->obj_gradient, x, y, w, h);
+                        __m128 obj = _mm_load_ps(pobj);
+                        obj += malpha * -(g_x + g_y) / g_norm;
+                        _mm_store_ps(pobj, obj);
+                }
 
-                float *pobj_b = p(aux->obj_gradient, x, y+1, w, h);
-                __m128 obj_b = _mm_load_ps(pobj_b);
-                obj_b += malpha * g_y / g_norm;
-                _mm_store_ps(pobj_b, obj_b);
+                {
+                        float *pobj_b = p(aux->obj_gradient, x, y+1, w, h);
+                        __m128 obj_b = _mm_load_ps(pobj_b);
+                        obj_b += malpha * g_y / g_norm;
+                        _mm_store_ps(pobj_b, obj_b);
+                }
         }
         // store
         for(unsigned c = 0; c < nchannel; c++) {
@@ -124,6 +130,10 @@ static void compute_step_tv_inner_simd(unsigned w, unsigned h, unsigned nchannel
 }
 
 static double compute_step_tv_simd(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
+        if(w < 4) {
+                return compute_step_tv_c(w, h, nchannel, auxs);
+        }
+
         double tv = 0.;
         ASSUME(nchannel <= 3);
         for(unsigned y = 0; y < h-1; y++) {
@@ -155,4 +165,134 @@ static void clamp_dct_simd(struct coef *coef, float *boxed, unsigned blocks) {
                 }
         }
         _mm_empty();
+}
+
+static void compute_step_tv2_inner_simd(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], float alpha, unsigned x, unsigned y, double *tv2) {
+        __m128 g_xxs[3] = {0};
+        __m128 g_xy_syms[3] = {0};
+        __m128 g_yys[3] = {0};
+
+        const __m128 mtwo = _mm_set_ps1(2.);
+        const __m128 minf = _mm_set_ps1(INFINITY);
+        const __m128 mzero = _mm_set_ps1(0.);
+
+        __m128 malpha = _mm_set_ps1(alpha * 1./sqrt(nchannel));
+
+        for(unsigned c = 0; c < nchannel; c++) {
+                struct aux *aux = &auxs[c];
+
+                __m128 g_x = _mm_load_ps(p(aux->temp[0], x, y, w, h));
+                __m128 g_y = _mm_load_ps(p(aux->temp[1], x, y, w, h));
+
+                // backward x
+                g_xxs[c] = g_x - _mm_loadu_ps(p(aux->temp[0], x-1, y, w, h));
+                // backward x
+                __m128 g_yx = g_y - _mm_loadu_ps(p(aux->temp[1], x-1, y, w, h));
+                // backward y
+                __m128 g_xy = g_x - _mm_load_ps(p(aux->temp[0], x, y-1, w, h));
+                // backward y
+                g_yys[c] = g_y - _mm_load_ps(p(aux->temp[1], x, y-1, w, h));
+                // symmetrize
+                g_xy_syms[c] = (g_xy + g_yx) / mtwo;
+        }
+
+        // norm
+        __m128 g2_norm = mzero;
+        for(unsigned c = 0; c < nchannel; c++) {
+                g2_norm += SQR(g_xxs[c]) + mtwo * SQR(g_xy_syms[c]) + SQR(g_yys[c]);
+        }
+        g2_norm = _mm_sqrt_ps(g2_norm);
+
+        __m128 alpha_norm = malpha * g2_norm;
+        *tv2 += alpha_norm[0];
+        *tv2 += alpha_norm[1];
+        *tv2 += alpha_norm[2];
+        *tv2 += alpha_norm[3];
+
+        // set zeroes to infinity
+        g2_norm = _mm_or_ps(g2_norm, _mm_and_ps(minf, _mm_cmpeq_ps(g2_norm, mzero)));
+
+        for(unsigned c = 0; c < nchannel; c++) {
+                __m128 g_xx = g_xxs[c];
+                __m128 g_yy = g_yys[c];
+                __m128 g_xy_sym = g_xy_syms[c];
+                struct aux *aux = &auxs[c];
+
+                // NB: for same exact result as the c version,
+                // we must calculate the objective gradient from right to left
+                {
+                        float *pobj_ur = p(aux->obj_gradient, x+1, y-1, w, h);
+                        __m128 obj_ur = _mm_loadu_ps(pobj_ur);
+                        obj_ur += malpha * ((-g_xy_sym) / g2_norm);
+                        _mm_storeu_ps(pobj_ur, obj_ur);
+                }
+
+                {
+                        float *pobj_r = p(aux->obj_gradient, x+1, y, w, h);
+                        __m128 obj_r = _mm_loadu_ps(pobj_r);
+                        obj_r += malpha * ((g_xy_sym + g_xx) / g2_norm);
+                        _mm_storeu_ps(pobj_r, obj_r);
+                }
+
+                {
+                        float *pobj_u = p(aux->obj_gradient, x, y-1, w, h);
+                        __m128 obj_u = _mm_load_ps(pobj_u);
+                        obj_u += malpha * ((g_yy + g_xy_sym) / g2_norm);
+                        _mm_store_ps(pobj_u, obj_u);
+                }
+
+                {
+                        float *pobj = p(aux->obj_gradient, x, y, w, h);
+                        __m128 obj = _mm_load_ps(pobj);
+                        obj += malpha * (-(mtwo * g_xx + mtwo * g_xy_sym + mtwo * g_yy) / g2_norm);
+                        _mm_store_ps(pobj, obj);
+                }
+
+                {
+                        float *pobj_b = p(aux->obj_gradient, x, y+1, w, h);
+                        __m128 obj_b = _mm_load_ps(pobj_b);
+                        obj_b += malpha * ((g_yy + g_xy_sym) / g2_norm);
+                        _mm_store_ps(pobj_b, obj_b);
+                }
+
+                {
+                        float *pobj_l = p(aux->obj_gradient, x-1, y, w, h);
+                        __m128 obj_l = _mm_loadu_ps(pobj_l);
+                        obj_l += malpha * ((g_xy_sym + g_xx) / g2_norm);
+                        _mm_storeu_ps(pobj_l, obj_l);
+                }
+
+                {
+                        float *pobj_lb = p(aux->obj_gradient, x-1, y+1, w, h);
+                        __m128 obj_lb = _mm_loadu_ps(pobj_lb);
+                        obj_lb += malpha * ((-g_xy_sym) / g2_norm);
+                        _mm_storeu_ps(pobj_lb, obj_lb);
+                }
+        }
+}
+
+static double compute_step_tv2_simd(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], float alpha) {
+        if(w < 8 || h < 2) {
+                return compute_step_tv2_c(w, h, nchannel, auxs, alpha);
+        }
+
+        double tv2 = 0.;
+        for(unsigned x = 0; x < w; x++) {
+                compute_step_tv2_inner_c(w, h, nchannel, auxs, alpha, x, 0, &tv2);
+        }
+        for(unsigned y = 1; y < h-1; y++) {
+                for(unsigned x = 0; x < 4; x++) {
+                        compute_step_tv2_inner_c(w, h, nchannel, auxs, alpha, x, y, &tv2);
+                }
+                for(unsigned x = 4; x < w-4; x+=4) {
+                        compute_step_tv2_inner_simd(w, h, nchannel, auxs, alpha, x, y, &tv2);
+                }
+                for(unsigned x = w-4; x < w; x++) {
+                        compute_step_tv2_inner_c(w, h, nchannel, auxs, alpha, x, y, &tv2);
+                }
+        }
+        for(unsigned x = 0; x < w; x++) {
+                compute_step_tv2_inner_c(w, h, nchannel, auxs, alpha, x, h-1, &tv2);
+        }
+        return tv2;
 }

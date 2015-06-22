@@ -94,7 +94,7 @@ static void compute_step_tv_inner_c(unsigned w, unsigned h, unsigned nchannel, s
         }
 }
 
-POSSIBLY_UNUSED static double compute_step_tv_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
+static double compute_step_tv_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
         double tv = 0.;
         ASSUME(nchannel <= 3);
         for(unsigned y = 0; y < h; y++) {
@@ -165,8 +165,7 @@ static void compute_step_tv2_inner_c(unsigned w, unsigned h, unsigned nchannel, 
         }
 }
 
-
-POSSIBLY_UNUSED static double compute_step_tv2_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], float alpha) {
+static double compute_step_tv2_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], float alpha) {
         double tv2 = 0.;
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
@@ -234,7 +233,7 @@ static double compute_step(
         if(weight != 0.) {
                 float alpha = weight / sqrt(4 / 2);
                 total_alpha += alpha * nchannel;
-                tv2 = compute_step_tv2_c(w, h, nchannel, auxs, alpha);
+                tv2 = POSSIBLY_SIMD(compute_step_tv2)(w, h, nchannel, auxs, alpha);
         }
 
         // do step

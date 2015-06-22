@@ -128,7 +128,7 @@ static double compute_step_tv2(unsigned w, unsigned h, float *obj_gradient, floa
                                         *p(obj_gradient, x-1, y, w, h) += alpha * ((g_xy_sym + g_xx) / g2_norm);
                                 }
                                 if(x < w-1) {
-                                        *p(obj_gradient, x+1, y, w, h) += alpha * ((g_xy_sym + g_xy) / g2_norm);
+                                        *p(obj_gradient, x+1, y, w, h) += alpha * ((g_xy_sym + g_xx) / g2_norm);
                                 }
                                 if(y > 0) {
                                         *p(obj_gradient, x, y-1, w, h) += alpha * ((g_yy + g_xy_sym) / g2_norm);

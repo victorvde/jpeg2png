@@ -51,49 +51,54 @@ POSSIBLY_UNUSED static double compute_step_prob_c(unsigned w, unsigned h, float 
         return prob_dist;
 }
 
-static double compute_step_tv_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
-        struct deriv {float g_x; float g_y;};
+static void compute_step_tv_inner_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], unsigned x, unsigned y, double *tv) {
+        float g_xs[3] = {0};
+        float g_ys[3] = {0};
+        for(unsigned c = 0; c < nchannel; c++) {
+                struct aux *aux = &auxs[c];
+                // forward gradient x
+                g_xs[c] = x >= w-1 ? 0. : *p(aux->fdata, x+1, y, w, h) - *p(aux->fdata, x, y, w, h);
+                // forward gradient y
+                g_ys[c] = y >= h-1 ? 0. : *p(aux->fdata, x, y+1, w, h) - *p(aux->fdata, x, y, w, h);
+        }
+        // norm
+        float g_norm = 0.;
+        for(unsigned c = 0; c < nchannel; c++) {
+                g_norm += sqr(g_xs[c]);
+                g_norm += sqr(g_ys[c]);
+        }
+        g_norm = sqrt(g_norm);
+        float alpha = 1./sqrt(nchannel);
+        *tv += alpha * g_norm;
+        // compute derivatives
+        for(unsigned c = 0; c < nchannel; c++) {
+                float g_x = g_xs[c];
+                float g_y = g_ys[c];
+                struct aux *aux = &auxs[c];
+                if(g_norm != 0) {
+                        *p(aux->obj_gradient, x, y, w, h) += alpha * -(g_x + g_y) / g_norm;
+                        if(x < w-1) {
+                                *p(aux->obj_gradient, x+1, y, w, h) += alpha * g_x / g_norm;
+                        }
+                        if(y < h-1) {
+                                *p(aux->obj_gradient, x, y+1, w, h) += alpha * g_y / g_norm;
+                        }
+                }
+        }
+        // store
+        for(unsigned c = 0; c < nchannel; c++) {
+                struct aux *aux = &auxs[c];
+                *p(aux->temp[0], x, y, w, h) = g_xs[c];
+                *p(aux->temp[1], x, y, w, h) = g_ys[c];
+        }
+}
 
+POSSIBLY_UNUSED static double compute_step_tv_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
         double tv = 0.;
-        struct deriv derivs[3];
         ASSUME(nchannel <= 3);
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
-                        for(unsigned c = 0; c < nchannel; c++) {
-                                struct deriv *deriv = &derivs[c];
-                                struct aux *aux = &auxs[c];
-                                // forward gradient x
-                                deriv->g_x = x >= w-1 ? 0. : *p(aux->fdata, x+1, y, w, h) - *p(aux->fdata, x, y, w, h);
-                                // forward gradient y
-                                deriv->g_y = y >= h-1 ? 0. : *p(aux->fdata, x, y+1, w, h) - *p(aux->fdata, x, y, w, h);
-                        }
-                        // norm
-                        float g_norm = 0.;
-                        for(unsigned c = 0; c < nchannel; c++) {
-                                struct deriv *deriv = &derivs[c];
-                                g_norm += sqr(deriv->g_x);
-                                g_norm += sqr(deriv->g_y);
-                        }
-                        g_norm = sqrt(g_norm);
-                        float alpha = 1./sqrt(nchannel);
-                        tv += alpha * g_norm;
-                        // compute derivatives
-                        for(unsigned c = 0; c < nchannel; c++) {
-                                float g_x = derivs[c].g_x;
-                                float g_y = derivs[c].g_y;
-                                struct aux *aux = &auxs[c];
-                                if(g_norm != 0) {
-                                        *p(aux->obj_gradient, x, y, w, h) += alpha * -(g_x + g_y) / g_norm;
-                                        if(x < w-1) {
-                                                *p(aux->obj_gradient, x+1, y, w, h) += alpha * g_x / g_norm;
-                                        }
-                                        if(y < h-1) {
-                                                *p(aux->obj_gradient, x, y+1, w, h) += alpha * g_y / g_norm;
-                                        }
-                                }
-                                *p(aux->temp[0], x, y, w, h) = g_x;
-                                *p(aux->temp[1], x, y, w, h) = g_y;
-                        }
+                        compute_step_tv_inner_c(w, h, nchannel, auxs, x, y, &tv);
                 }
         }
         return tv;

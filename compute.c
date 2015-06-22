@@ -142,7 +142,7 @@ static void compute_step_tv2_inner_c(unsigned w, unsigned h, unsigned nchannel, 
                         float g_xy_sym = g_xy_syms[c];
                         struct aux *aux = &auxs[c];
 
-                        *p(aux->obj_gradient, x, y, w, h) += alpha * (-(2. * g_xx + 2. * g_xy_sym + 2. *  g_yy) / g2_norm);
+                        *p(aux->obj_gradient, x, y, w, h) += alpha * (-(2 * g_xx + 2 * g_xy_sym + 2 * g_yy) / g2_norm);
                         if(x > 0) {
                                 *p(aux->obj_gradient, x-1, y, w, h) += alpha * ((g_xy_sym + g_xx) / g2_norm);
                         }
@@ -219,7 +219,7 @@ static double compute_step(
 
                 // DCT coefficent distance
                 if(pweight[c] !=  0.) {
-                        float p_alpha = pweight[c] * 2. * 255. * sqrt(2.);
+                        float p_alpha = pweight[c] * 2 * 255 * sqrt(2);
                         total_alpha += p_alpha;
                         prob_dist += POSSIBLY_SIMD(compute_step_prob)(w, h, p_alpha, coef, aux->cos, aux->obj_gradient);
                 }
@@ -232,7 +232,7 @@ static double compute_step(
         // TVG second order
         double tv2 = 0.;
         if(weight != 0.) {
-                float alpha = weight / sqrt(4. / 2.);
+                float alpha = weight / sqrt(4 / 2);
                 total_alpha += alpha * nchannel;
                 tv2 = compute_step_tv2_c(w, h, nchannel, auxs, alpha);
         }
@@ -295,8 +295,8 @@ static void aux_destroy(struct aux *aux) {
 POSSIBLY_UNUSED static void clamp_dct_c(struct coef *coef, float *boxed, unsigned blocks) {
                 for(unsigned i = 0; i < blocks; i++) {
                 for(unsigned j = 0; j < 64; j++) {
-                        float min = (coef->data[i*64+j] - 0.5) * coef->quant_table[j];
-                        float max = (coef->data[i*64+j] + 0.5) * coef->quant_table[j];
+                        float min = (coef->data[i*64+j] - 0.5f) * coef->quant_table[j];
+                        float max = (coef->data[i*64+j] + 0.5f) * coef->quant_table[j];
                         boxed[i*64+j] = CLAMP(boxed[i*64+j], min, max);
                 }
         }

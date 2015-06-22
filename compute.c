@@ -187,9 +187,9 @@ static double compute_step(
         double tv2 = 0.;
         OPENMP(parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:tv2))
         for(unsigned c = 0; c < nchannel; c++) {
-                // TVG second order
                 struct aux *aux = &auxs[c];
 
+                // TVG second order
                 if(weight[c] != 0) {
                         float alpha = weight[c] / sqrt(4. / 2.);
                         total_alpha += alpha;
@@ -197,7 +197,7 @@ static double compute_step(
                 }
 
                 // do step (normalized)
-                float norm = 0.;
+                double norm = 0.;
                 for(unsigned i = 0; i < h * w; i++) {
                         norm += sqr(aux->obj_gradient[i]);
                 }

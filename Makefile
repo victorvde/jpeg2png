@@ -16,6 +16,7 @@ WINDOWS?=0
 CFLAGS+=-std=c11 -pedantic
 CFLAGS+=-msse2 -mfpmath=sse
 WARN_FLAGS+=-Wall -Wextra -Winline -Wshadow
+NO_WARN_FLAGS+=-w
 CC?=$(HOST)gcc
 WINDRES?=$(HOST)windres
 LIBS+=-ljpeg -lpng -lm -lz
@@ -67,7 +68,7 @@ jpeg2png$(EXE): $(OBJS) $(RES) Makefile
 -include $(OBJS:.o=.d)
 
 gopt/gopt.o: gopt/gopt.c gopt/gopt.h Makefile
-	$(CC) $< -c -o $@ $(CFLAGS) $(BFLAGS)
+	$(CC) $< -c -o $@ $(CFLAGS) $(BFLAGS) $(NO_WARN_FLAGS)
 
 %.o: %.c Makefile
 	$(CC) -MP -MMD $< -c -o $@ $(CFLAGS) $(BFLAGS) $(WARN_FLAGS)

@@ -193,9 +193,10 @@ static double compute_norm(unsigned w, unsigned h, float *data) {
 static void compute_do_step(unsigned w, unsigned h, float *fdata, float *obj_gradient, float step_size) {
         // do step (normalized)
         float norm = compute_norm(w, h, obj_gradient);
-
-        for(unsigned i = 0; i < h * w; i++) {
-                fdata[i] = fdata[i] - step_size * (obj_gradient[i] /  norm);
+        if(norm != 0.) {
+                for(unsigned i = 0; i < h * w; i++) {
+                        fdata[i] = fdata[i] - step_size * (obj_gradient[i] /  norm);
+                }
         }
 }
 

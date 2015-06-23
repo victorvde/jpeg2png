@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
+#include <float.h>
 
 #include "jpeg2png.h"
 #include "compute.h"
@@ -9,6 +11,8 @@
 #include "logger.h"
 
 #include "ooura/dct.h"
+
+static_assert(FLT_EVAL_METHOD == 0, "to preserve identical output please disable excess precision");
 
 struct aux {
         float *cos;

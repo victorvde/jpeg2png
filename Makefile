@@ -20,7 +20,7 @@ NO_WARN_FLAGS+=-w
 CC?=$(HOST)gcc
 WINDRES?=$(HOST)windres
 LIBS+=-ljpeg -lpng -lm -lz
-OBJS+=jpeg2png.o utils.o jpeg.o png.o box.o compute.o logger.o progressbar.o gopt/gopt.o ooura/dct.o
+OBJS+=jpeg2png.o utils.o jpeg.o png.o box.o compute.o logger.o progressbar.o fp_exceptions.o gopt/gopt.o ooura/dct.o
 
 ifeq ($(BUILTINS),1)
 CFLAGS+=-DBUILTIN_UNREACHABLE -DBUILTIN_ASSUME_ALIGNED -DATTRIBUTE_UNUSED
@@ -32,7 +32,6 @@ else # not supported by gcc
 CFLAGS+=-ffp-contract=off
 endif
 
-CFLAGS+=
 ifeq ($(SIMD),1)
 CFLAGS+=-DUSE_SIMD
 endif
@@ -42,7 +41,7 @@ BFLAGS+=-fopenmp
 endif
 
 ifeq ($(DEBUG),1)
-CFLAGS+=-Og -DNDEBUG
+CFLAGS+=-Og -DDEBUG
 BFLAGS+=-pg -g
 else
 CFLAGS+=-O3 -DNDEBUG

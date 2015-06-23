@@ -16,6 +16,7 @@
 #include "compute.h"
 #include "logger.h"
 #include "progressbar.h"
+#include "fp_exceptions.h"
 
 #define JPEG2PNG_VERSION "0.4"
 static const float default_weight = 0.3;
@@ -161,6 +162,8 @@ void decode_file(FILE* in, FILE *out, unsigned iterations[3], float weights[3], 
 
 
 int main(int argc, const char **argv) {
+        enable_fp_exceptions();
+
         void *options = gopt_sort(&argc, argv, gopt_start(
                 gopt_option('h', GOPT_NOARG, gopt_shorts('h','?'), gopt_longs("help")),
                 gopt_option('V', GOPT_NOARG, gopt_shorts('V'), gopt_longs("version")),

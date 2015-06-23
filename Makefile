@@ -5,6 +5,7 @@ $(foreach var,$(filter-out .% MAKE% SUFFIXES,$(.VARIABLES)),$(if $(findstring $(
 
 # Build options
 BUILTINS?=1
+PRAGMA_FP_CONTRACT?=0
 SIMD?=1
 OPENMP?=1
 DEBUG?=0
@@ -24,6 +25,13 @@ ifeq ($(BUILTINS),1)
 CFLAGS+=-DBUILTIN_UNREACHABLE -DBUILTIN_ASSUME_ALIGNED -DATTRIBUTE_UNUSED
 endif
 
+ifeq ($(PRAGMA_FP_CONTRACT),1)
+CFLAGS+=-DPRAGMA_FP_CONTRACT
+else # not supported by gcc
+CFLAGS+=-ffp-contract=off
+endif
+
+CFLAGS+=
 ifeq ($(SIMD),1)
 CFLAGS+=-DUSE_SIMD
 endif

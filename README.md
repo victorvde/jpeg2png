@@ -106,7 +106,8 @@ The step size chosen is ``radius(Q) / sqrt(1 + number of steps)``, where ``radiu
 * make comparisons with known JPEG artifact reduction techniques
 * make it go faster
 * ~~investigate optimizing all components together~~
-  * implemented for TV, don't know if it make sense for TVG
+  * implemented for TV, ~~don't know if it make sense for TVG~~
+    * implemented for TVG
 * ~~investigate better chroma upsampling~~
   * too late, too small to make a real difference
 * ~~investigate automake / autoconf~~

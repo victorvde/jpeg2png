@@ -5,6 +5,11 @@
 #include "png.h"
 #include "utils.h"
 
+static noreturn void png_die(png_struct *png_ptr, const char *error_msg){
+        (void)png_ptr;
+        die("libpng error: %s", error_msg);
+}
+
 static float clamp(float x) {
         return CLAMP(x, 0., 255.);
 }
@@ -15,11 +20,8 @@ void write_png(FILE *out, unsigned w, unsigned h, unsigned bits, struct coef *y,
         if(!png_ptr) { die("could not initialize PNG write struct"); }
         png_info *info_ptr = png_create_info_struct(png_ptr);
         if (!info_ptr) { die("could not initialize PNG info struct"); }
-        if (setjmp(png_jmpbuf(png_ptr)))
-        {
-                /* If we get here, we had a problem writing the file */
-                die("problem while writing PNG file");
-        }
+        void *error = png_get_error_ptr(png_ptr);
+        png_set_error_fn(png_ptr, error, png_die, NULL);
         png_init_io(png_ptr, out);
         png_set_IHDR(png_ptr, info_ptr, w, h, bits, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
         png_write_info(png_ptr, info_ptr);

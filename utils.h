@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+void die_message_start();
 noreturn void die(const char *msg, ...);
 noreturn void die_perror(const char *msg, ...);
 clock_t start_timer(const char *name);

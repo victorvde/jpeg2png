@@ -10,10 +10,18 @@
 #include "utils.h"
 #include "ooura/dct.h"
 
+static void die_output_message(struct jpeg_common_struct *c) {
+        die_message_start();
+        char error_message[JMSG_LENGTH_MAX];
+        c->err->format_message(c, error_message);
+        fprintf(stderr, "libjpeg error: %s\n", error_message);
+}
+
 void read_jpeg(FILE *in, struct jpeg *jpeg) {
         struct jpeg_decompress_struct d;
         struct jpeg_error_mgr jerr;
         d.err = jpeg_std_error(&jerr);
+        d.err->output_message = die_output_message;
         jpeg_create_decompress(&d);
         jpeg_stdio_src(&d, in);
         jpeg_read_header(&d, true);

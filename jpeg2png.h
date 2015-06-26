@@ -2,6 +2,7 @@
 #define JPEG2PNG_JPEG2PNG_H
 
 #include <stdint.h>
+#include "progressbar.h"
 
 struct coef {
         unsigned h;
@@ -12,5 +13,7 @@ struct coef {
         float *fdata;
         uint16_t quant_table[64];
 };
+
+extern struct progressbar *main_progressbar;
 
 #endif

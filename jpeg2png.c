@@ -161,6 +161,8 @@ void decode_file(FILE* in, FILE *out, unsigned iterations[3], float weights[3], 
 }
 
 
+struct progressbar *main_progressbar;
+
 int main(int argc, const char **argv) {
         enable_fp_exceptions();
 
@@ -296,6 +298,7 @@ int main(int argc, const char **argv) {
                 } else {
                         progressbar_start(&pb, nin * (iterations[0] + iterations[1] + iterations[2]));
                 }
+                main_progressbar = &pb;
         }
 
         OPENMP(parallel for schedule(dynamic) if(nin > 1))
@@ -321,6 +324,7 @@ int main(int argc, const char **argv) {
 
         if(!quiet) {
                 progressbar_done(&pb);
+                main_progressbar = NULL;
         }
 
         gopt_free(options);

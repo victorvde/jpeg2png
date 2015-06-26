@@ -4,22 +4,31 @@
 #include <math.h>
 
 #include "utils.h"
+#include "progressbar.h"
+#include "jpeg2png.h"
+
+static void die_common(const char *msg, va_list l) {
+        if(main_progressbar) {
+                progressbar_done(main_progressbar);
+                main_progressbar = NULL;
+        }
+        fprintf(stderr, "jpeg2png: ");
+        vfprintf(stderr, msg, l);
+}
 
 noreturn void die(const char *msg, ...)  {
-        fprintf(stderr, "jpeg2png: ");
         va_list l;
         va_start(l, msg);
-        vfprintf(stderr, msg, l);
+        die_common(msg, l);
         va_end(l);
         fprintf(stderr, "\n");
         exit(EXIT_FAILURE);
 }
 
 noreturn void die_perror(const char *msg, ...)  {
-        fprintf(stderr, "jpeg2png: ");
         va_list l;
         va_start(l, msg);
-        vfprintf(stderr, msg, l);
+        die_common(msg, l);
         va_end(l);
         fprintf(stderr, ": ");
         perror(NULL);

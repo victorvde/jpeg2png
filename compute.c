@@ -19,9 +19,9 @@ static_assert(FLT_EVAL_METHOD == 0, "to preserve identical output please disable
 
 struct aux {
         float *obj_gradient;
-        // temp[0] is (TVG) g_xs (PROJ/PROB) boxed
-        // temp[1] is (TVG) g_ys (PROJ/PROB) subsampled
-        // temp[2] is (TVG) gnorms (PROJ/PROB) DCTed data
+        // temp[0] is (TVG) d_xs (PROJ/PROB) boxed
+        // temp[1] is (TVG) d_ys (PROJ/PROB) subsampled
+        // temp[2] is (TVG) d_norms (PROJ/PROB) DCTed data
         float *temp[3];
         float *fdata;
         float *fista;
@@ -61,54 +61,86 @@ POSSIBLY_UNUSED static double compute_step_prob_c(unsigned w, unsigned h, float 
         return alpha * prob_dist;
 }
 
-static void compute_step_tv_inner_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], unsigned x, unsigned y, double *tv) {
-        float g_xs[3] = {0};
-        float g_ys[3] = {0};
+static void compute_step_tv_norms_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], unsigned x, unsigned y, float *d_norms) {
+        float d_norm = 0.;
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];
-                // forward gradient x
-                g_xs[c] = x >= w-1 ? 0. : *p(aux->fdata, x+1, y, w, h) - *p(aux->fdata, x, y, w, h);
-                // forward gradient y
-                g_ys[c] = y >= h-1 ? 0. : *p(aux->fdata, x, y+1, w, h) - *p(aux->fdata, x, y, w, h);
+                // forward difference x
+                float d_x = x >= w-1 ? 0. : *p(aux->fdata, x+1, y, w, h) - *p(aux->fdata, x, y, w, h);
+                // forward difference y
+                float d_y = y >= h-1 ? 0. : *p(aux->fdata, x, y+1, w, h) - *p(aux->fdata, x, y, w, h);
+                // store
+                *p(aux->temp[0], x, y, w, h) = d_x;
+                *p(aux->temp[1], x, y, w, h) = d_y;
+                // norm
+                d_norm += sqr(d_x);
+                d_norm += sqr(d_y);
         }
-        // norm
-        float g_norm = 0.;
-        for(unsigned c = 0; c < nchannel; c++) {
-                g_norm += sqr(g_xs[c]);
-                g_norm += sqr(g_ys[c]);
-        }
-        g_norm = sqrt(g_norm);
-        float alpha = 1./sqrt(nchannel);
-        *tv += alpha * g_norm;
+        d_norm = sqrt(d_norm);
+        *p(d_norms, x, y, w, h) = d_norm;
+}
+
+static void compute_step_tv_objective_c(unsigned w, unsigned h, float alpha, struct aux *aux, unsigned x, unsigned y, float *d_norms) {
         // compute derivatives
-        for(unsigned c = 0; c < nchannel; c++) {
-                float g_x = g_xs[c];
-                float g_y = g_ys[c];
-                struct aux *aux = &auxs[c];
-                if(g_norm != 0) {
-                        *p(aux->obj_gradient, x, y, w, h) += alpha * -(g_x + g_y) / g_norm;
-                        if(x < w-1) {
-                                *p(aux->obj_gradient, x+1, y, w, h) += alpha * g_x / g_norm;
+        float obj = 0.;
+
+        float d_norm = *p(d_norms, x, y, w, h);
+        if(d_norm != 0.) {
+                // forward difference x
+                float d_x = *p(aux->temp[0], x, y, w, h);
+                // forward difference y
+                float d_y = *p(aux->temp[1], x, y, w, h);
+                obj += -(d_x + d_y) / d_norm;
+        }
+
+        if(x > 0) {
+                float dnorm_r = *p(d_norms, x-1, y, w, h);
+                if(dnorm_r != 0.) {
+                        // forward difference x (other pixel)
+                        float d_x_o = *p(aux->temp[0], x-1, y, w, h);
+                        obj += d_x_o / dnorm_r;
                         }
-                        if(y < h-1) {
-                                *p(aux->obj_gradient, x, y+1, w, h) += alpha * g_y / g_norm;
-                        }
+        }
+
+        if(y > 0) {
+                float dnorm_u = *p(d_norms, x, y-1, w, h);
+                if(dnorm_u != 0.) {
+                        // forward difference y (other pixel)
+                        float d_y_o = *p(aux->temp[1], x, y-1, w, h);
+                        obj += d_y_o / dnorm_u;
                 }
         }
-        // store
-        for(unsigned c = 0; c < nchannel; c++) {
-                struct aux *aux = &auxs[c];
-                *p(aux->temp[0], x, y, w, h) = g_xs[c];
-                *p(aux->temp[1], x, y, w, h) = g_ys[c];
-        }
+
+        *p(aux->obj_gradient, x, y, w, h) += alpha * obj;
 }
 
 static double compute_step_tv_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
         double tv = 0.;
-        ASSUME(nchannel <= 3);
+        float alpha = 1./sqrt(nchannel);
+        float *d_norms = auxs[0].temp[2];
+
+        OPENMP(parallel for collapse(2))
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
-                        compute_step_tv_inner_c(w, h, nchannel, auxs, x, y, &tv);
+                        compute_step_tv_norms_c(w, h, nchannel, auxs, x, y, d_norms);
+                }
+        }
+
+        OPENMP(parallel for collapse(2))
+        for(unsigned y = 0; y < h; y++) {
+                for(unsigned x = 0; x < w; x++) {
+                        float d_norm = *p(d_norms, x, y, w, h);
+                        tv += alpha * d_norm;
+                }
+        }
+
+        OPENMP(parallel for collapse(3))
+        for(unsigned c = 0; c < nchannel; c++) {
+                for(unsigned y = 0; y < h; y++) {
+                        for(unsigned x = 0; x < w; x++) {
+                                struct aux *aux = &auxs[c];
+                                compute_step_tv_objective_c(w, h, alpha, aux, x, y, d_norms);
+                        }
                 }
         }
         return tv;
@@ -216,7 +248,7 @@ static double compute_step(
         float total_alpha = 0.;
 
         double prob_dist = 0.;
-        OPENMP(parallel for schedule(dynamic) reduction(+:total_alpha) reduction(+:prob_dist))
+        OPENMP(parallel for reduction(+:total_alpha) reduction(+:prob_dist))
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];
                 struct coef *coef = &coefs[c];
@@ -247,7 +279,7 @@ static double compute_step(
         }
 
         // do step
-        OPENMP(parallel for schedule(dynamic))
+        OPENMP(parallel for)
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];
                 compute_do_step(w, h, aux->fdata, aux->obj_gradient, step_size);

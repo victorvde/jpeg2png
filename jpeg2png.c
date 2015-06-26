@@ -274,6 +274,10 @@ int main(int argc, const char **argv) {
         } else {
                 for(unsigned i = 0; i < nin; i++) {
                         const char *infile = argv[1+i];
+                        FILE *in = fopen(infile, "rb");
+                        if(!in) { die("could not open input file `%s`", infile); }
+                        fclose(in);
+
                         unsigned l = strlen(infile);
                         unsigned e = l;
                         if(l >= 5 && memcmp(".jpeg", &infile[l-5], 5) == 0) {
@@ -288,9 +292,14 @@ int main(int argc, const char **argv) {
 
                         if(!nout && !force) {
                                 // don't overwrite when not given -o or -f, racy
-                                FILE *outr = fopen(outfile, "rb");
-                                if(outr) { die("not overwriting output file `%s`", outfile); }
+                                FILE *out = fopen(outfile, "rb");
+                                if(out) { die("not overwriting output file `%s`", outfile); }
                         }
+
+                        FILE *out = fopen(outfile, "wb");
+                        if(!out) { die("could not open output file `%s`", outfile); }
+                        fclose(out);
+                        remove(outfile);
 
                         outfiles[i] = outfile;
                }

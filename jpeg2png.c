@@ -115,7 +115,9 @@ noreturn static void usage() {
         exit(EXIT_FAILURE);
 }
 
-void decode_file(FILE* in, FILE *out, unsigned iterations[3], float weights[3], float pweights[3], unsigned png_bits, bool all_together, struct progressbar *pb, struct logger *log) {
+void decode_file(const char* infile, const char *outfile, unsigned iterations[3], float weights[3], float pweights[3], unsigned png_bits, bool all_together, struct progressbar *pb, struct logger *log) {
+        FILE *in = fopen(infile, "rb");
+        if(!in) { die_perror("could not open input file `%s`", infile); }
         struct jpeg jpeg;
         read_jpeg(in, &jpeg);
         fclose(in);
@@ -151,6 +153,8 @@ void decode_file(FILE* in, FILE *out, unsigned iterations[3], float weights[3], 
                 coef->fdata[i] += 128.;
         }
 
+        FILE *out = fopen(outfile, "wb");
+        if(!out) { die_perror("could not open output file `%s`", outfile); }
         write_png(out, jpeg.w, jpeg.h, png_bits, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);
         fclose(out);
 
@@ -307,12 +311,7 @@ int main(int argc, const char **argv) {
                 const char *outfile = outfiles[i];
                 log.filename = infile;
 
-                FILE *in = fopen(infile, "rb");
-                if(!in) { die_perror("could not open input file `%s`", infile); }
-                FILE *out = fopen(outfile, "wb");
-                if(!out) { die_perror("could not open output file `%s`", outfile); }
-
-                decode_file(in, out, iterations, weights, pweights, png_bits, all_together, quiet ? NULL : &pb, &log);
+                decode_file(infile, outfile, iterations, weights, pweights, png_bits, all_together, quiet ? NULL : &pb, &log);
         }
 
         if(!nout) {

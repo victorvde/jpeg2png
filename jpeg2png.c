@@ -115,7 +115,7 @@ noreturn static void usage() {
         exit(EXIT_FAILURE);
 }
 
-void decode_file(const char* infile, const char *outfile, unsigned iterations[3], float weights[3], float pweights[3], unsigned png_bits, bool all_together, struct progressbar *pb, struct logger *log) {
+void decode_file(const char* infile, const char *outfile, unsigned iterations[3], float weights[3], float pweights[3], unsigned png_bits, bool all_together, struct progressbar *pb, struct logger *plog) {
         FILE *in = fopen(infile, "rb");
         if(!in) { die_perror("could not open input file `%s`", infile); }
         struct jpeg jpeg;
@@ -137,14 +137,15 @@ void decode_file(const char* infile, const char *outfile, unsigned iterations[3]
         }
 
         if(all_together) {
-                log->channel = 3;
-                compute(3, jpeg.coefs, log, pb, weights[0], pweights, iterations[0]);
+                plog->channel = 3;
+                compute(3, jpeg.coefs, plog, pb, weights[0], pweights, iterations[0]);
         } else {
+                struct logger log = *plog;
                 OPENMP(parallel for schedule(dynamic) firstprivate(log))
                 for(unsigned i = 0; i < 3; i++) {
-                        log->channel = i;
+                        log.channel = i;
                         struct coef *coef = &jpeg.coefs[i];
-                        compute(1, coef, log, pb, weights[i], &pweights[i], iterations[i]);
+                        compute(1, coef, &log, pb, weights[i], &pweights[i], iterations[i]);
                 }
         }
 
@@ -305,7 +306,7 @@ int main(int argc, const char **argv) {
                 main_progressbar = &pb;
         }
 
-        OPENMP(parallel for schedule(dynamic) if(nin > 1))
+        OPENMP(parallel for schedule(dynamic) if(nin > 1) firstprivate(log))
         for(unsigned i = 0; i < nin; i++) {
                 const char *infile = argv[1+i];
                 const char *outfile = outfiles[i];

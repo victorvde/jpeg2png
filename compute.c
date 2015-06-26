@@ -18,9 +18,11 @@ static_assert(FLT_EVAL_METHOD == 0, "to preserve identical output please disable
 #endif
 
 struct aux {
-        float *cos;
         float *obj_gradient;
-        float *temp[2];
+        // temp[0] is (TVG) g_xs (PROJ/PROB) boxed
+        // temp[1] is (TVG) g_ys (PROJ/PROB) subsampled
+        // temp[2] is (TVG) gnorms (PROJ/PROB) DCTed data
+        float *temp[3];
         float *fdata;
         float *fista;
 };
@@ -228,7 +230,7 @@ static double compute_step(
                 if(pweight[c] !=  0.) {
                         float p_alpha = pweight[c] * 2 * 255 * sqrt(2);
                         total_alpha += p_alpha;
-                        prob_dist += POSSIBLY_SIMD(compute_step_prob)(w, h, p_alpha, coef, aux->cos, aux->obj_gradient);
+                        prob_dist += POSSIBLY_SIMD(compute_step_prob)(w, h, p_alpha, coef, aux->temp[2], aux->obj_gradient);
                 }
         }
 
@@ -258,19 +260,18 @@ static double compute_step(
 }
 
 static void aux_init(unsigned w, unsigned h, struct coef *coef, struct aux *aux) {
-        float *cos = alloc_real(coef->h * coef->w);
+        for(unsigned i = 0; i < 3; i++) {
+                float *t = alloc_real(h * w);
+                aux->temp[i] = t;
+        }
+        float *cos = aux->temp[2];
         unsigned blocks = (coef->h / 8) * (coef->w / 8);
         for(unsigned i = 0; i < blocks; i++) {
                 for(unsigned j = 0; j < 64; j++) {
                         cos[i*64+j] = coef->data[i*64+j] * coef->quant_table[j];
                 }
         }
-        aux->cos = cos;
 
-        for(unsigned i = 0; i < 2; i++) {
-                float *t = alloc_real(h * w);
-                aux->temp[i] = t;
-        }
         float *obj_gradient = alloc_real(h * w);
         aux->obj_gradient = obj_gradient;
 
@@ -290,8 +291,7 @@ static void aux_init(unsigned w, unsigned h, struct coef *coef, struct aux *aux)
 }
 
 static void aux_destroy(struct aux *aux) {
-        free_real(aux->cos);
-        for(unsigned i = 0; i < 2; i++) {
+        for(unsigned i = 0; i < 3; i++) {
                 free_real(aux->temp[i]);
         }
         free_real(aux->obj_gradient);
@@ -353,7 +353,7 @@ static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct c
 
         POSSIBLY_SIMD(clamp_dct)(coef, boxed, blocks);
 
-        memcpy(aux->cos, boxed, coef->w * coef->h * sizeof(float));
+        memcpy(aux->temp[2], boxed, coef->w * coef->h * sizeof(float));
 
         for(unsigned i = 0; i < blocks; i++) {
                 idct8x8s(&boxed[i*64]);

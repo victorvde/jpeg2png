@@ -19,6 +19,8 @@ void compare(const char *name, unsigned w, unsigned h, float *new, float *old);
 #define MAX(a, b)  (((a) > (b)) ? (a) : (b))
 #define CLAMP(x, low, high) (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 #define DUMP(v, f) do { printf( #v " = " f "\n", v); } while(false)
+#define DUMPD(v) DUMP(v, "%d")
+#define DUMPF(v) DUMP(v, "%f")
 #define DUMP_SIMD(r) do { __m128 _t = r; _mm_empty(); printf( #r " = %.9e,%.9e,%.9e,%.9e\n", _t[0], _t[1], _t[2], _t[3]); } while(false)
 #define SWAP(type, x, y) do { type _t = x; x = y; y = _t; } while(false)
 

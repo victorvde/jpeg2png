@@ -75,8 +75,8 @@ static void compute_step_tv_inner_c(unsigned w, unsigned h, unsigned nchannel, s
                 g_norm += sqr(g_xs[c]);
                 g_norm += sqr(g_ys[c]);
         }
-        g_norm = sqrt(g_norm);
-        float alpha = 1./sqrt(nchannel);
+        g_norm = sqrtf(g_norm);
+        float alpha = 1./sqrtf(nchannel);
         *tv += alpha * g_norm;
         // compute derivatives
         for(unsigned c = 0; c < nchannel; c++) {
@@ -136,9 +136,9 @@ static void compute_step_tv2_inner_c(unsigned w, unsigned h, unsigned nchannel, 
         for(unsigned c = 0; c < nchannel; c++) {
                 g2_norm += sqr(g_xxs[c]) + 2 * sqr(g_xy_syms[c]) + sqr(g_yys[c]);
         }
-        g2_norm = sqrt(g2_norm);
+        g2_norm = sqrtf(g2_norm);
 
-        alpha = alpha * 1./sqrt(nchannel);
+        alpha = alpha * 1./sqrtf(nchannel);
         *tv2 += alpha * g2_norm;
 
         // compute derivatives
@@ -187,7 +187,7 @@ static double compute_norm(unsigned w, unsigned h, float *data) {
         for(unsigned i = 0; i < h * w; i++) {
                 norm += sqr(data[i]);
         }
-        return sqrt(norm);
+        return sqrtf(norm);
 }
 
 static void compute_do_step(unsigned w, unsigned h, float *fdata, float *obj_gradient, float step_size) {
@@ -226,7 +226,7 @@ static double compute_step(
 
                 // DCT coefficent distance
                 if(pweight[c] !=  0.) {
-                        float p_alpha = pweight[c] * 2 * 255 * sqrt(2);
+                        float p_alpha = pweight[c] * 2 * 255 * sqrtf(2);
                         total_alpha += p_alpha;
                         prob_dist += POSSIBLY_SIMD(compute_step_prob)(w, h, p_alpha, coef, aux->cos, aux->obj_gradient);
                 }
@@ -239,7 +239,7 @@ static double compute_step(
         // TVG second order
         double tv2 = 0.;
         if(weight != 0.) {
-                float alpha = weight / sqrt(4 / 2);
+                float alpha = weight / sqrtf(4 / 2);
                 total_alpha += alpha * nchannel;
                 tv2 = POSSIBLY_SIMD(compute_step_tv2)(w, h, nchannel, auxs, alpha);
         }
@@ -392,12 +392,12 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
                 aux_init(w, h, &coefs[c], &auxs[c]);
         }
 
-        float radius = sqrt(w*h) / 2;
+        float radius = sqrtf(w*h) / 2;
         float t = 1;
         for(unsigned i = 0; i < iterations; i++) {
                 log->iteration = i;
 
-                float tnext = (1 + sqrt(1 + 4 * sqr(t))) / 2;
+                float tnext = (1 + sqrtf(1 + 4 * sqr(t))) / 2;
                 float factor = (t - 1) / tnext;
                 for(unsigned c = 0; c < nchannel; c++) {
                         struct aux *aux = &auxs[c];
@@ -408,7 +408,7 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
                 }
                 t = tnext;
 
-                compute_step(w, h, nchannel, coefs, auxs, radius / sqrt(1 + iterations), weight, pweight, log);
+                compute_step(w, h, nchannel, coefs, auxs, radius / sqrtf(1 + iterations), weight, pweight, log);
                 OPENMP(parallel for schedule(dynamic))
                 for(unsigned c = 0; c < nchannel; c++) {
                         compute_projection(w, h, &auxs[c], &coefs[c]);

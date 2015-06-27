@@ -55,7 +55,7 @@ void compare(const char * name, unsigned w, unsigned h, float *new, float *old) 
                         float old1 = *p(old, x, y, w, h);
                         if(isnan(new1)) {
                                 die("%u, %u is NaN", x, y);
-                        } else if (fabs(new1 - old1) / old1 > epsilon) {
+                        } else if (fabsf(new1 - old1) / old1 > epsilon) {
                                 die("difference at %s %u, %u: %.9e, %.9e\n", name, x, y, new1, old1);
                         }
                 }

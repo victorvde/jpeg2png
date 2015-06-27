@@ -81,7 +81,7 @@ static void compute_step_tv_inner_simd(unsigned w, unsigned h, unsigned nchannel
         }
         g_norm = _mm_sqrt_ps(g_norm);
 
-        float alpha = 1./sqrt(nchannel);
+        float alpha = 1./sqrtf(nchannel);
         *tv += alpha * g_norm[0];
         *tv += alpha * g_norm[1];
         *tv += alpha * g_norm[2];
@@ -176,7 +176,7 @@ static void compute_step_tv2_inner_simd(unsigned w, unsigned h, unsigned nchanne
         const __m128 minf = _mm_set_ps1(INFINITY);
         const __m128 mzero = _mm_set_ps1(0.);
 
-        __m128 malpha = _mm_set_ps1(alpha * 1./sqrt(nchannel));
+        __m128 malpha = _mm_set_ps1(alpha * 1./sqrtf(nchannel));
 
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];

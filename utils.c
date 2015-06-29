@@ -9,7 +9,7 @@
 
 void die_message_start() {
         if(main_progressbar) {
-                progressbar_done(main_progressbar);
+                progressbar_clear(main_progressbar);
                 main_progressbar = NULL;
         }
         fprintf(stderr, "jpeg2png: ");

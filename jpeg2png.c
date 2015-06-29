@@ -332,7 +332,7 @@ int main(int argc, const char **argv) {
         free(outfiles);
 
         if(!quiet) {
-                progressbar_done(&pb);
+                progressbar_clear(&pb);
                 main_progressbar = NULL;
         }
 

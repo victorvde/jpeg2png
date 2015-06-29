@@ -52,7 +52,7 @@ void progressbar_inc(struct progressbar *pb) {
         progressbar_add(pb, 1);
 }
 
-void progressbar_done(struct progressbar *pb) {
+void progressbar_clear(struct progressbar *pb) {
         (void)pb;
         printf("\r");
         for(unsigned i = 0; i < progressbar_width + 7; i++) {

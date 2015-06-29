@@ -27,7 +27,7 @@ static double compute_step_prob_simd(unsigned w, unsigned h, float alpha, struct
                         }
                         idct8x8s(cosb);
                         if(coef->w_samp > 1 || coef->h_samp > 1) {
-                                 for(unsigned in_y = 0; in_y < 8; in_y++) {
+                                for(unsigned in_y = 0; in_y < 8; in_y++) {
                                         for(unsigned in_x = 0; in_x < 8; in_x++) {
                                                 unsigned j = in_y * 8 + in_x;
                                                 unsigned cx = block_x * 8 + in_x;

@@ -302,7 +302,7 @@ int main(int argc, const char **argv) {
                         remove(outfile);
 
                         outfiles[i] = outfile;
-               }
+                }
         }
 
         struct progressbar pb;

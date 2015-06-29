@@ -301,7 +301,7 @@ static void aux_destroy(struct aux *aux) {
 }
 
 POSSIBLY_UNUSED static void clamp_dct_c(struct coef *coef, float *boxed, unsigned blocks) {
-                for(unsigned i = 0; i < blocks; i++) {
+        for(unsigned i = 0; i < blocks; i++) {
                 for(unsigned j = 0; j < 64; j++) {
                         float min = (coef->data[i*64+j] - 0.5f) * coef->quant_table[j];
                         float max = (coef->data[i*64+j] + 0.5f) * coef->quant_table[j];
@@ -340,7 +340,7 @@ static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct c
                                                 unsigned y = cy * coef->h_samp + sy;
                                                 unsigned x = cx * coef->w_samp + sx;
                                                 *p(aux->fdata, x, y, w, h) -= mean;
-                                }
+                                        }
                                 }
                         }
                 }

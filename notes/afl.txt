@@ -1,0 +1,2 @@
+CC=afl-gcc make DEBUG=1 OPENMP=0
+afl-fuzz -t 1000 -i /usr/share/afl/testcases/images/jpeg/ -o afl ./jpeg2png @@ -o /dev/null -i2

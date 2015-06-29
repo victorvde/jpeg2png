@@ -104,7 +104,20 @@ The step size chosen is ``radius(Q) / sqrt(1 + number of steps)``, where ``radiu
 
 * do more testing on different kinds of images
 * make comparisons with known JPEG artifact reduction techniques
-* make it go faster
+* ~~make it go faster~~
+  * basically everything has SSE2 versions now, 2x speedup versus pure C
+  * parallel (OpenMP)
+    * almost linear speedup for multiple files
+    * runs max 3x as fast with --separate-components
+    * otherwise 1.1x speedup (2 cores)
+    * not sure if it was worth the time in the end, but it made sense when --separate-components was the only mode
+  * things that didn't work out
+    * not boxing/unboxing: no performance difference (branch no_boxing)
+    * using a z-order curve: no performance difference
+    * turning TV inside out to make it parallel: 1.15x speedup in C version (2 cores) (branch parallel_tv)
+      * makes the code very hard to read
+      * too small of a difference to justify rewriting tgv and simd versions
+  * ultimately, the progress bar was more important than improving time from 40 to 18 seconds
 * ~~investigate optimizing all components together~~
   * implemented for TV, ~~don't know if it make sense for TGV~~
     * implemented for TGV

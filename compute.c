@@ -283,6 +283,8 @@ static void aux_init(unsigned w, unsigned h, struct coef *coef, struct aux *aux)
                 }
         }
         aux->fdata = fdata;
+        free_real(coef->fdata);
+        coef->fdata = NULL;
 
         float *fista = alloc_real(h * w);
         memcpy(fista, fdata, sizeof(float) * w * h);
@@ -295,7 +297,6 @@ static void aux_destroy(struct aux *aux) {
                 free_real(aux->temp[i]);
         }
         free_real(aux->obj_gradient);
-        free_real(aux->fdata);
         free_real(aux->fista);
 }
 
@@ -422,7 +423,8 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];
                 struct coef *coef = &coefs[c];
-                SWAP(float *, aux->fdata, coef->fdata);
+                coef->fdata = aux->fdata;
+                aux->fdata = NULL;
                 coef->w = w;
                 coef->h = h;
                 aux_destroy(aux);

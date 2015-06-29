@@ -42,7 +42,7 @@ noreturn static void usage() {
         printf(
                 "-w weight[,weight_cb,weight_cr]\n"
                 "--second-order-weight weight[,weight_cb,weight_cr]\n"
-                "\tweight is a floating point number for TVG weight alpha_1\n"
+                "\tweight is a floating point number for TGV weight alpha_1\n"
                 "\thigher values give smoother transitions with less staircasing\n"
                 "\ta value of 1.0 means equivalent weight to the first order weight\n"
                 "\ta value of 0.0 means plain Total Variation, and gives a speed boost\n"
@@ -74,8 +74,8 @@ noreturn static void usage() {
                 "\n");
         printf(
                 "-s\n"
-                "--seperate-components\n"
-                "\tseperately optimize components\n"
+                "--separate-components\n"
+                "\tseparately optimize components\n"
                 "\tthis is faster and makes multithreading more effective\n"
                 "\thowever the edges of different components can be different\n"
                 "\n");
@@ -179,7 +179,7 @@ int main(int argc, const char **argv) {
                 gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs("csv-log")),
                 gopt_option('t', GOPT_ARG, gopt_shorts('t'), gopt_longs("threads")),
                 gopt_option('q', GOPT_NOARG, gopt_shorts('q'), gopt_longs("quiet")),
-                gopt_option('s', GOPT_NOARG, gopt_shorts('s'), gopt_longs("seperate-components")),
+                gopt_option('s', GOPT_NOARG, gopt_shorts('s'), gopt_longs("separate-components")),
                 gopt_option('1', GOPT_NOARG, gopt_shorts('1'), gopt_longs("16-bits-png")),
                 gopt_option('i', GOPT_ARG, gopt_shorts('i'), gopt_longs("iterations")),
                 gopt_option('p', GOPT_ARG, gopt_shorts('p'), gopt_longs("probability-weight")),
@@ -200,7 +200,7 @@ int main(int argc, const char **argv) {
                 int n = sscanf(arg_string, "%f,%f,%f", &weights[0], &weights[1], &weights[2]);
                 if(n == 3) {
                         if(all_together) {
-                                die("different weights are only possible when using seperated components");
+                                die("different weights are only possible when using separated components");
                         }
                 } else if(n ==1) {
                         // ok
@@ -225,7 +225,7 @@ int main(int argc, const char **argv) {
                 int n = sscanf(arg_string, "%u,%u,%u", &iterations[0], &iterations[1], &iterations[2]);
                 if(n == 3) {
                         if(all_together) {
-                                die("different iteration counts are only possible when using seperated components");
+                                die("different iteration counts are only possible when using separated components");
                         }
                 } else if(n == 1) {
                         iterations[1] = iterations[0];

@@ -236,7 +236,7 @@ static double compute_step(
         total_alpha += nchannel;
         double tv = POSSIBLY_SIMD(compute_step_tv)(w, h, nchannel, auxs);
 
-        // TVG second order
+        // TGV second order
         double tv2 = 0.;
         if(weight != 0.) {
                 float alpha = weight / sqrtf(4 / 2);

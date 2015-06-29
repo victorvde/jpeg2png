@@ -22,11 +22,11 @@ eq2 : [g_xx = (r-x)-(x-l), g_yy = (b-x)-(x-u), g_xy = (r-x)-(rb-b), g_yx = (r-x)
 /* [wxMaxima: input   end   ] */
 
 /* [wxMaxima: input   start ] */
-tvg : sqrt(g_xx^2 + g_yy^2+ g_xy^2 + g_yx^2)$
+tgv : sqrt(g_xx^2 + g_yy^2+ g_xy^2 + g_yx^2)$
 /* [wxMaxima: input   end   ] */
 
 /* [wxMaxima: input   start ] */
-diffw(eq2, tvg, [x, l, r, u, b, rb]);
+diffw(eq2, tgv, [x, l, r, u, b, rb]);
 /* [wxMaxima: input   end   ] */
 
 /* [wxMaxima: input   start ] */
@@ -34,7 +34,7 @@ eq3 : [g_xx = (r-x)-(x-l), g_yy = (b-x)-(x-u), g_xy = (r-x)-(ru-u), g_yx = (b-x)
 /* [wxMaxima: input   end   ] */
 
 /* [wxMaxima: input   start ] */
-diffw(eq3, tvg, [x, l, r, u, b, ru, lb]);
+diffw(eq3, tgv, [x, l, r, u, b, ru, lb]);
 /* [wxMaxima: input   end   ] */
 
 /* Maxima can't load/batch files which end with a comment! */

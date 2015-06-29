@@ -28,16 +28,16 @@ Under Windows, you can also drag-and-drop JPEG files onto the program.
 
 ## Availability
 
-jpeg2png is written in portable C, specfically C11. It relies on libjpeg and libpng.
+jpeg2png is written in portable C, specifically C11. It relies on libjpeg and libpng.
 You can compile the executable using make and gcc.
 jpeg2png is licensed GPLv3+.
 
-A precompiled Windows version is available on the ["Releases" page](../../releases).
+A compiled Windows version is available on the ["Releases" page](../../releases).
 
 ## What "smooth" means
 jpeg2png finds the smoothest possible picture that encodes to the given JPEG file.
 But what is "smooth"? A first approximation is [Total Variation](https://en.wikipedia.org/wiki/Total_variation_denoising).
-It says that smoothness is the sum of the differences between neighbouring pixels.
+It says that smoothness is the sum of the differences between neighboring pixels.
 This works pretty well, but it can create very sharp transitions.
 ``0 1 2 3 4`` and ``0 0 0 4 4`` both have a Total Variation of 4.
 
@@ -76,8 +76,8 @@ The quality is very good, but such a high number is probably overkill.
 JPEG encoding goes something like
 ``convert colors to YCbCr -> chroma subsampling -> blockwise DCT -> quantization -> rounding -> entropy coding``
 
-Standand JPEG decoding goes something like
-``entropy decoding -> unquantization -> blockwise IDCT -> chroma upsampling -> convert colors to RGB``.
+Standard JPEG decoding goes something like
+``entropy decoding -> dequantization -> blockwise IDCT -> chroma upsampling -> convert colors to RGB``.
 
 The crucial step that is missing in decoding is reversing the rounding.
 Of course rounding is not one-to-one invertible, but we can unround x to the interval ``[x-0.5, x+0.5]``.
@@ -85,11 +85,11 @@ This gives us the set of possible pictures.
 
 Our objective is to minimize ``sum i=1 to n (norm(gradient(u_i))) + w * sum i=1 to n (norm(gradient(gradient(u_i)))) + p * sum (DCT(u-original)/quant)^2)``.
 To get the gradient for the TV term of the objective we use forward differences.
-The norm is an Euclidian norm.
-For the second order TVG term we use backward differences for the second gradient, giving us a 2x2 Hessian matrix.
+The norm is an Euclidean norm.
+For the second order TGV term we use backward differences for the second gradient, giving us a 2x2 Hessian matrix.
 We symmetrize the matrix, that is we average dxdy and dydx.
 The norm here is a Frobenius norm.
-We do not use any higher order TVG terms.
+We do not use any higher order TGV terms.
 The deviations are normalized by the quantization factors.
 We do not differentiate between deviations in the DC and AC coefficients.
 
@@ -106,8 +106,8 @@ The step size chosen is ``radius(Q) / sqrt(1 + number of steps)``, where ``radiu
 * make comparisons with known JPEG artifact reduction techniques
 * make it go faster
 * ~~investigate optimizing all components together~~
-  * implemented for TV, ~~don't know if it make sense for TVG~~
-    * implemented for TVG
+  * implemented for TV, ~~don't know if it make sense for TGV~~
+    * implemented for TGV
 * ~~investigate better chroma upsampling~~
   * too late, too small to make a real difference
 * ~~investigate automake / autoconf~~
@@ -115,9 +115,9 @@ The step size chosen is ``radius(Q) / sqrt(1 + number of steps)``, where ``radiu
 * ~~investigate smoothing methods~~
   * only accelerates the start, no improvement in the end
 * ~~investigate other stop conditions than a fixed number of steps~~
-  * no good criterium when using subgradient method
+  * no good criterion when using subgradient method
 * ~~investigate dual methods, Bregman~~
-  * too complicated and inflexible, primal-dual has a good stopping criterium but same complexity
+  * too complicated and inflexible, primal-dual has a good stopping criterion but same complexity
 * ~~support gray-scale, maybe other JPEG features~~
   * low interest, file an issue if you have a real-world use for this
 
@@ -129,7 +129,7 @@ Maybe over-mathematical, but that's my impression of a lot of image papers.
 
 [2] ["Introductory Lectures on Convex Programming, Volume I: Basic course" (1998) by Yurii Nestorov](http://enpub.fulton.asu.edu/cseml/Fall2008_ConvOpt/book/Intro-nl.pdf)
 
-I believe this may be a draft of his 2004 book, but it's phenomonal nonetheless.
+I believe this may be a draft of his 2004 book, but it's phenomenal nonetheless.
 This is a solid foundation, well organized, with clear explanations and full proofs.
 Strongly recommended.
 
@@ -144,11 +144,11 @@ More advanced than the above, considers subsampling, TGV, primal-dual algorithms
 
 [5] ["DCT Quantization Noise in Compressed Images" by Mark A. Robertson and Robert L. Stevenson](https://www3.nd.edu/~lisa/mrobert2/csvt2001submit.pdf)
 
-This is the source for the DCT deviations model. Uniform distribution for the errors is close enough, even if a generalized normal distribution with beta = 1/2 is more realistic. I ignore the HMRF stuff because I find the Huber function very ad-hoc and inelegant.
+This is the source for the DCT deviations model. Uniform distribution for the errors is close enough, even if a generalized normal distribution with beta = 1/2 is more realistic. I ignore the HMRF stuff because I find the Huber function very ad hoc and inelegant.
 
 ## Links
 
-[qjpegrest](http://viric.name/soft/qjpegrest/) is a tool that lets you try many different JPEG restoration methods (TV based, bandpass based and Huber MRF based). I didn't get it to compile because it's old and I'm allergic to CMake, but I learned from the code.
+[qjpegrest](http://viric.name/soft/qjpegrest/) is a tool that lets you try many different JPEG restoration methods (TV based, band-pass based and Huber MRF based). I didn't get it to compile because it's old and I'm allergic to CMake, but I learned from the code.
 
 ## License
 

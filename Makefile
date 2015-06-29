@@ -4,13 +4,13 @@
 $(foreach var,$(filter-out .% MAKE% SUFFIXES,$(.VARIABLES)),$(if $(findstring $(origin $(var)),default),$(eval undefine $(var))))
 
 # Build options
-BUILTINS?=1
-PRAGMA_FP_CONTRACT?=0
-SIMD?=1
-OPENMP?=1
-DEBUG?=0
-SAVE_ASM?=0
-WINDOWS?=0
+BUILTINS=1
+PRAGMA_FP_CONTRACT=0
+SIMD=1
+OPENMP=1
+DEBUG=0
+SAVE_ASM=0
+WINDOWS=0
 
 # VARIABLES
 CFLAGS+=-std=c11 -pedantic
@@ -21,6 +21,8 @@ CC?=$(HOST)gcc
 WINDRES?=$(HOST)windres
 LIBS+=-ljpeg -lpng -lm -lz
 OBJS+=jpeg2png.o utils.o jpeg.o png.o box.o compute.o logger.o progressbar.o fp_exceptions.o gopt/gopt.o ooura/dct.o
+HOST=
+EXE=
 
 ifeq ($(BUILTINS),1)
 CFLAGS+=-DBUILTIN_UNREACHABLE -DBUILTIN_ASSUME_ALIGNED -DATTRIBUTE_UNUSED
@@ -49,8 +51,8 @@ LDFLAGS+=-s
 endif
 
 ifeq ($(WINDOWS),1)
-HOST?=i686-w64-mingw32-
-EXE?=.exe
+HOST=i686-w64-mingw32-
+EXE=.exe
 LDFLAGS+=-static
 
 RES+=icon.rc.o
@@ -60,17 +62,22 @@ ifeq ($(SAVE_ASM),1)
 CFLAGS+=-save-temps -masm=intel -fverbose-asm
 endif
 
+CFLAGS+=$(BFLAGS)
+LDFLAGS+=$(BFLAGS)
+
 # RULES
+all: jpeg2png$(EXE)
+
 jpeg2png$(EXE): $(OBJS) $(RES) Makefile
-	$(CC) $(OBJS) $(RES) -o $@ $(LDFLAGS) $(BFLAGS) $(LIBS)
+	$(CC) $(OBJS) $(RES) -o $@ $(LDFLAGS) $(LIBS)
 
 -include $(OBJS:.o=.d)
 
 gopt/gopt.o: gopt/gopt.c gopt/gopt.h Makefile
-	$(CC) $< -c -o $@ $(CFLAGS) $(BFLAGS) $(NO_WARN_FLAGS)
+	$(CC) $< -c -o $@ $(CFLAGS) $(NO_WARN_FLAGS)
 
 %.o: %.c Makefile
-	$(CC) -MP -MMD $< -c -o $@ $(CFLAGS) $(BFLAGS) $(WARN_FLAGS)
+	$(CC) -MP -MMD $< -c -o $@ $(CFLAGS) $(WARN_FLAGS)
 
 %.rc.o: %.rc Makefile
 	$(WINDRES) $< $@

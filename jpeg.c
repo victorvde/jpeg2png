@@ -36,6 +36,11 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
                 if(i >= NUM_QUANT_TBLS) { die("weird jpeg: invalid quant_tbl_no"); }
                 JQUANT_TBL *t = d.quant_tbl_ptrs[i];
                 if(!t) { die("weird jpeg: no quant table pointer"); }
+                for(unsigned j = 0; j < 64; j++) {
+                        if(t->quantval[j] == 0) {
+                                die("invalid quantization table");
+                        }
+                }
                 memcpy(&(jpeg->coefs[c].quant_table), t->quantval, sizeof(uint16_t) * 64);
         }
 

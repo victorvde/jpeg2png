@@ -20,19 +20,32 @@ jpeg2png is smarter and fills the missing information to create the smoothest po
 * Bottom left: [JPEG encoded](../images/deviantart.jpg) at 90% quality with 4:4:4 chroma subsampling using the GIMP, 64x64 detail
 * Bottom right: [JPEG decoded](../images/deviantart_restored.png) with jpeg2png using the default settings, 64x64 detail
 
-## Usage
+## Installation
+A compiled Windows version is available on the ["Releases" page](../../releases).
 
+jpeg2png is written in portable C, specifically C11. It relies on libjpeg and libpng.
+You can compile the executable using GNU make and either GCC or Clang. Execute one of
+
+    make
+    CC=clang make
+
+You may use ``./jpeg2png`` to execute it without installing, or install using
+
+    sudo make install
+
+jpeg2png is licensed GPLv3+.
+
+## Usage
 Just execute ``jpeg2png picture.jpg`` to create ``picture.png``. Execute ``jpeg2png --help`` to see all options.
 
 Under Windows, you can also drag-and-drop JPEG files onto the program.
 
-## Availability
+jpeg2png gives best results for pictures that should never be saved as JPEG.
+Examples are charts, logo's, and cartoon-style digital drawings.
 
-jpeg2png is written in portable C, specifically C11. It relies on libjpeg and libpng.
-You can compile the executable using make and gcc.
-jpeg2png is licensed GPLv3+.
+On the other hand, jpeg2png gives poor result for photographs or other finely textured pictures.
 
-A compiled Windows version is available on the ["Releases" page](../../releases).
+For pictures that have been reencoded to JPEG multiple times I recommend [shred](https://www.gnu.org/software/coreutils/manual/html_node/shred-invocation.html).
 
 ## What "smooth" means
 jpeg2png finds the smoothest possible picture that encodes to the given JPEG file.
@@ -93,11 +106,13 @@ We do not use any higher order TGV terms.
 The deviations are normalized by the quantization factors.
 We do not differentiate between deviations in the DC and AC coefficients.
 
-The objective is convex and our search space ``Q`` is convex too.
 Unfortunately if one of the norms is zero the gradient of our objective is not defined, so our objective is not smooth.
+The subderivative chosen when a norm is zero is 0.
+
+The objective is convex and our search space ``Q`` is convex too.
 We can project onto our search space easily because DCT is orthogonal. So we can DCT, project the deviations onto the box ``[-0.5, +0.5]^n``, and IDCT back.
 
-We use the subgradient method with projection and FISTA acceleration. The subderivative chosen when a norm is zero is 0.
+In conclusion, we use the subgradient method with projection and FISTA acceleration.
 The step size chosen is ``radius(Q) / sqrt(1 + number of steps)``, where ``radius(Q)`` is ``sqrt(n) / 2``.
 
 ## Wishlist

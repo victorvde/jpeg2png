@@ -66,6 +66,7 @@ CFLAGS+=$(BFLAGS)
 LDFLAGS+=$(BFLAGS)
 
 # RULES
+.PHONY: clean all install uninstall
 all: jpeg2png$(EXE)
 
 jpeg2png$(EXE): $(OBJS) $(RES) Makefile
@@ -82,6 +83,11 @@ gopt/gopt.o: gopt/gopt.c gopt/gopt.h Makefile
 %.rc.o: %.rc Makefile
 	$(WINDRES) $< $@
 
-.PHONY: clean
 clean:
 	git clean -Xf
+
+install: all
+	install -Dm755 jpeg2png "$(DESTDIR)"/usr/bin/jpeg2png
+
+uninstall:
+	rm "$(DESTDIR)"/usr/bin/jpeg2png

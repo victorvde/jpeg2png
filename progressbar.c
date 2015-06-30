@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include "progressbar.h"
 
+// see progressbar.h
+
 static const unsigned progressbar_width = 70;
 
 static unsigned get_to_print(unsigned current, unsigned max) {

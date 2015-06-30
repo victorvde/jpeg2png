@@ -7,6 +7,7 @@
 #include "progressbar.h"
 #include "jpeg2png.h"
 
+// clean up line and print prefix
 void die_message_start() {
         if(main_progressbar) {
                 progressbar_clear(main_progressbar);
@@ -15,6 +16,7 @@ void die_message_start() {
         fprintf(stderr, "jpeg2png: ");
 }
 
+// abort program with a message
 noreturn void die(const char *msg, ...)  {
         die_message_start();
         va_list l;
@@ -25,6 +27,7 @@ noreturn void die(const char *msg, ...)  {
         exit(EXIT_FAILURE);
 }
 
+// abort program with a system message
 noreturn void die_perror(const char *msg, ...)  {
         die_message_start();
         va_list l;
@@ -36,6 +39,7 @@ noreturn void die_perror(const char *msg, ...)  {
         exit(EXIT_FAILURE);
 }
 
+// see utils.h
 clock_t start_timer(const char *name) {
         (void) name;
         return clock();
@@ -47,6 +51,7 @@ void stop_timer(clock_t t, const char *n) {
         printf("%s: %u ms\n", n, msec);
 }
 
+// compare image sized buffers, e.g. c and simd versions
 void compare(const char * name, unsigned w, unsigned h, float *new, float *old) {
         const float epsilon = 1.e-6;
         for(unsigned y = 0; y < h; y++) {

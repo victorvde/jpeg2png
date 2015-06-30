@@ -5,16 +5,20 @@
 #include "png.h"
 #include "utils.h"
 
+// png error handler
 static noreturn void png_die(png_struct *png_ptr, const char *error_msg){
         (void)png_ptr;
         die("libpng error: %s", error_msg);
 }
 
+// clamp to RGB range
 static float clamp(float x) {
         return CLAMP(x, 0., 255.);
 }
 
+// write image to PNG file
 void write_png(FILE *out, unsigned w, unsigned h, unsigned bits, struct coef *y, struct coef *cb, struct coef *cr) {
+        // initialize png
         ASSUME(bits == 8 || bits == 16);
         png_struct *png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
         if(!png_ptr) { die("could not initialize PNG write struct"); }
@@ -29,17 +33,20 @@ void write_png(FILE *out, unsigned w, unsigned h, unsigned bits, struct coef *y,
         png_byte *image_data = calloc(sizeof(png_byte), h * w * 3 * depth);
         if(!image_data) { die("could not allocate image data");}
 
+        // write png lines
         for(unsigned i = 0; i < h; i++) {
                 for(unsigned j = 0; j < w; j++) {
                         float yi = *p(y->fdata, j, i, y->w, y->h);
                         float cbi = *p(cb->fdata, j, i, cb->w, cb->h);
                         float cri = *p(cr->fdata, j, i, cr->w, cr->h);
 
+                        // YCbCr -> RGB
                         float bitfactor = (1 << bits) / 256.;
                         unsigned r = clamp(yi + 1.402 * cri) * bitfactor;
                         unsigned g = clamp(yi - 0.34414 * cbi - 0.71414 * cri) * bitfactor;
                         unsigned b = clamp(yi + 1.772 * cbi) * bitfactor;
 
+                        // write to png line
                         png_byte *here = &image_data[(i*w+j)*3*depth];
                         if(bits == 8) {
                                 here[0] = r & 0xFF;
@@ -56,11 +63,13 @@ void write_png(FILE *out, unsigned w, unsigned h, unsigned bits, struct coef *y,
                 }
         }
 
+        // pointers to png lines
         png_byte **rows = malloc(sizeof(*rows) * h);
         if(!rows) { die("allocation failure"); }
         for(unsigned i = 0; i < h; i++) {
                 rows[i] = &image_data[i * w * 3 * depth];
         }
+        // write
         png_write_image(png_ptr, rows);
         free(rows);
         png_write_end(png_ptr, info_ptr);

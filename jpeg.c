@@ -10,6 +10,7 @@
 #include "utils.h"
 #include "ooura/dct.h"
 
+// clean up progress bar when printing warnings
 static void die_output_message(struct jpeg_common_struct *c) {
         die_message_start();
         char error_message[JMSG_LENGTH_MAX];
@@ -17,6 +18,7 @@ static void die_output_message(struct jpeg_common_struct *c) {
         fprintf(stderr, "libjpeg error: %s\n", error_message);
 }
 
+// read JPEG file DCT coefficients and quantization tables
 void read_jpeg(FILE *in, struct jpeg *jpeg) {
         struct jpeg_decompress_struct d;
         struct jpeg_error_mgr jerr;
@@ -67,6 +69,7 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
         jpeg_destroy_decompress(&d);
 }
 
+// decode DCT coefficients into image data
 void decode_coefficients(struct coef *coef) {
         coef->fdata = alloc_real(coef->h * coef->w);
         unsigned blocks = (coef->h / 8) * (coef->w / 8);

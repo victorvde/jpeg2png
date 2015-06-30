@@ -8,6 +8,7 @@
 
 void enable_fp_exceptions() {
 #ifdef DEBUG
+        // glibc specific
         feenableexcept(FE_DIVBYZERO | FE_OVERFLOW | FE_INVALID);
 #endif
 }

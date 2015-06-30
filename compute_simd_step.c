@@ -2,6 +2,8 @@
 #include <math.h>
 #include "utils.h"
 
+// SSE2, optimized versions of functions in compute.c
+
 static double compute_step_prob_simd(unsigned w, unsigned h, float alpha, struct coef *coef, float *cos, float *obj_gradient) {
         double prob_dist = 0.;
         unsigned block_w = coef->w / 8;
@@ -98,7 +100,7 @@ static void compute_step_tv_inner_simd(unsigned w, unsigned h, unsigned nchannel
                 __m128 g_y = g_ys[c];
                 struct aux *aux = &auxs[c];
 
-                // NB: for numerical stability and same exact result as the c version,
+                // N.B. for numerical stability and same exact result as the c version,
                 // we must calculate the objective gradient at x+1 before x
                 {
                         float *pobj_r = p(aux->obj_gradient, x+1, y, w, h);
@@ -218,7 +220,7 @@ static void compute_step_tv2_inner_simd(unsigned w, unsigned h, unsigned nchanne
                 __m128 g_xy_sym = g_xy_syms[c];
                 struct aux *aux = &auxs[c];
 
-                // NB: for same exact result as the c version,
+                // N.B. for same exact result as the c version,
                 // we must calculate the objective gradient from right to left
                 {
                         float *pobj_ur = p(aux->obj_gradient, x+1, y-1, w, h);

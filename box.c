@@ -1,6 +1,7 @@
 #include "box.h"
 #include "utils.h"
 
+// convert from 8x8 blocks to normal order
 void unbox(float *restrict in, float *restrict out, unsigned w, unsigned h) {
         ASSUME((w & 7) == 0);
         ASSUME((h & 7) == 0);
@@ -17,6 +18,7 @@ void unbox(float *restrict in, float *restrict out, unsigned w, unsigned h) {
         }
 }
 
+// convert from normal order to 8x8 blocks
 void box(float *restrict in, float *restrict out, unsigned w, unsigned h) {
         ASSUME((w & 7) == 0);
         ASSUME((h & 7) == 0);

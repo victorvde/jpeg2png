@@ -3,6 +3,7 @@
 #include "logger.h"
 #include "utils.h"
 
+// initialize logger, write csv header
 void logger_start(struct logger *log, FILE *csv_log) {
         log->f = csv_log;
         log->filename = "";
@@ -15,6 +16,7 @@ void logger_start(struct logger *log, FILE *csv_log) {
         }
 }
 
+// write csv line
 void logger_log(struct logger *log, double objective, double prob_dist, double tv, double tv2) {
         if(log->f) {
                 OPENMP(critical(write_log))

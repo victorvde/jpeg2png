@@ -23,6 +23,7 @@ static const float default_weight = 0.3;
 static const float default_pweight = 0.001;
 static const unsigned default_iterations = 50;
 
+// print usage information and die
 noreturn static void usage() {
         printf(
                 "usage: jpeg2png picture.jpg ... [-o picture.png] ... [flags...]\n"
@@ -115,7 +116,9 @@ noreturn static void usage() {
         exit(EXIT_FAILURE);
 }
 
+// decode a single JPEG file smoothly
 void decode_file(const char* infile, const char *outfile, unsigned iterations[3], float weights[3], float pweights[3], unsigned png_bits, bool all_together, struct progressbar *pb, struct logger *plog) {
+        // decode jpg normally
         FILE *in = fopen(infile, "rb");
         if(!in) { die_perror("could not open input file `%s`", infile); }
         struct jpeg jpeg;
@@ -125,7 +128,6 @@ void decode_file(const char* infile, const char *outfile, unsigned iterations[3]
                 struct coef *coef = &jpeg.coefs[c];
                 decode_coefficients(coef);
         }
-
         for(unsigned i = 0; i < 3; i++) {
                 struct coef *coef = &jpeg.coefs[i];
                 float *temp = alloc_real(coef->h * coef->w);
@@ -136,6 +138,7 @@ void decode_file(const char* infile, const char *outfile, unsigned iterations[3]
                 coef->fdata = temp;
         }
 
+        // smooth
         if(all_together) {
                 plog->channel = 3;
                 compute(3, jpeg.coefs, plog, pb, weights[0], pweights, iterations[0]);
@@ -149,16 +152,19 @@ void decode_file(const char* infile, const char *outfile, unsigned iterations[3]
                 }
         }
 
+        // fixup luma range
         struct coef *coef = &jpeg.coefs[0];
         for(unsigned i = 0; i < coef->h * coef->w; i++) {
                 coef->fdata[i] += 128.;
         }
 
+        // write png
         FILE *out = fopen(outfile, "wb");
         if(!out) { die_perror("could not open output file `%s`", outfile); }
         write_png(out, jpeg.w, jpeg.h, png_bits, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);
         fclose(out);
 
+        // clean up
         for(unsigned i = 0; i < 3; i++) {
                 free_real(jpeg.coefs[i].fdata);
                 free(jpeg.coefs[i].data);
@@ -171,6 +177,7 @@ struct progressbar *main_progressbar;
 int main(int argc, const char **argv) {
         enable_fp_exceptions();
 
+        // define command line flags
         void *options = gopt_sort(&argc, argv, gopt_start(
                 gopt_option('h', GOPT_NOARG, gopt_shorts('h','?'), gopt_longs("help")),
                 gopt_option('V', GOPT_NOARG, gopt_shorts('V'), gopt_longs("version")),
@@ -184,6 +191,7 @@ int main(int argc, const char **argv) {
                 gopt_option('i', GOPT_ARG, gopt_shorts('i'), gopt_longs("iterations")),
                 gopt_option('p', GOPT_ARG, gopt_shorts('p'), gopt_longs("probability-weight")),
                 gopt_option('w', GOPT_ARG, gopt_shorts('w'), gopt_longs("second-order-weight"))));
+        // parse command line flags
         if(gopt(options, 'V')) {
                 printf("jpeg2png version "JPEG2PNG_VERSION" licensed GPLv3+\n");
                 exit(EXIT_FAILURE);
@@ -258,9 +266,11 @@ int main(int argc, const char **argv) {
         unsigned png_bits = gopt(options, '1') ? 16 : 8;
         bool force = gopt(options, 'f');
 
+        // initialize logger
         struct logger log;
         logger_start(&log, csv_log);
 
+        // get output filenames, do basic file checking
         unsigned nin = argc - 1;
         unsigned nout = gopt(options, 'o');
         if(!(nout == 0 || nout == nin)) {
@@ -305,6 +315,7 @@ int main(int argc, const char **argv) {
                 }
         }
 
+        // initialize progress bar
         struct progressbar pb;
         if(!quiet) {
                 if(all_together) {
@@ -315,6 +326,7 @@ int main(int argc, const char **argv) {
                 main_progressbar = &pb;
         }
 
+        // decode each file smoothly
         OPENMP(parallel for schedule(dynamic) if(nin > 1) firstprivate(log))
         for(unsigned i = 0; i < nin; i++) {
                 const char *infile = argv[1+i];
@@ -324,6 +336,7 @@ int main(int argc, const char **argv) {
                 decode_file(infile, outfile, iterations, weights, pweights, png_bits, all_together, quiet ? NULL : &pb, &log);
         }
 
+        // clean up
         if(!nout) {
                 for(unsigned i = 0; i < nin; i++) {
                         free(outfiles[i]);

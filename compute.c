@@ -17,15 +17,24 @@ static_assert(FLT_EVAL_METHOD == 0, "to preserve identical output please disable
 #pragma STDC FP_CONTRACT OFF
 #endif
 
+// working buffers for each component
 struct aux {
+        // DCT coefficients for step_prob
         float *cos;
+        // gradient (derivative) of the objective function
         float *obj_gradient;
+        // temp[0] = pixel differences in x direction
+        // temp[1] = pixel differences in y direction
+        // also used differently in compute_projection
         float *temp[2];
+        // image data
         float *fdata;
+        // previous step image data for FISTA
         float *fista;
 };
 
-// Note: destroys cos
+// compute objective gradient for the distance of DCT coefficients from normal decoding
+// N.B. destroys cos
 POSSIBLY_UNUSED static double compute_step_prob_c(unsigned w, unsigned h, float alpha, struct coef *coef, float *cos, float *obj_gradient) {
         double prob_dist = 0.;
         unsigned block_w = coef->w / 8;
@@ -36,10 +45,11 @@ POSSIBLY_UNUSED static double compute_step_prob_c(unsigned w, unsigned h, float 
                         float *cosb = &cos[i*64];
                         for(unsigned j = 0; j < 64; j++) {
                                 cosb[j] -= (float)coef->data[i*64+j] * coef->quant_table[j];
-                                prob_dist += 0.5 * sqr(cosb[j] / coef->quant_table[j]);
-                                cosb[j] = cosb[j] / sqr((float)coef->quant_table[j]);
+                                prob_dist += 0.5 * sqr(cosb[j] / coef->quant_table[j]); // objective function
+                                cosb[j] = cosb[j] / sqr((float)coef->quant_table[j]); // derivative
                         }
                         idct8x8s(cosb);
+                        // unbox and possibly upsample derivative
                         for(unsigned in_y = 0; in_y < 8; in_y++) {
                                 for(unsigned in_x = 0; in_x < 8; in_x++) {
                                         unsigned j = in_y * 8 + in_x;
@@ -59,14 +69,15 @@ POSSIBLY_UNUSED static double compute_step_prob_c(unsigned w, unsigned h, float 
         return alpha * prob_dist;
 }
 
+// compute objective gradient for TV for one pixel
 static void compute_step_tv_inner_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], unsigned x, unsigned y, double *tv) {
         float g_xs[3] = {0};
         float g_ys[3] = {0};
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];
-                // forward gradient x
+                // forward difference x
                 g_xs[c] = x >= w-1 ? 0. : *p(aux->fdata, x+1, y, w, h) - *p(aux->fdata, x, y, w, h);
-                // forward gradient y
+                // forward difference y
                 g_ys[c] = y >= h-1 ? 0. : *p(aux->fdata, x, y+1, w, h) - *p(aux->fdata, x, y, w, h);
         }
         // norm
@@ -77,8 +88,8 @@ static void compute_step_tv_inner_c(unsigned w, unsigned h, unsigned nchannel, s
         }
         g_norm = sqrtf(g_norm);
         float alpha = 1./sqrtf(nchannel);
-        *tv += alpha * g_norm;
-        // compute derivatives
+        *tv += alpha * g_norm; // objective function
+        // compute derivatives (see notes)
         for(unsigned c = 0; c < nchannel; c++) {
                 float g_x = g_xs[c];
                 float g_y = g_ys[c];
@@ -93,7 +104,7 @@ static void compute_step_tv_inner_c(unsigned w, unsigned h, unsigned nchannel, s
                         }
                 }
         }
-        // store
+        // store for use in tv2
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];
                 *p(aux->temp[0], x, y, w, h) = g_xs[c];
@@ -101,6 +112,7 @@ static void compute_step_tv_inner_c(unsigned w, unsigned h, unsigned nchannel, s
         }
 }
 
+// compute objective gradient for TV
 static double compute_step_tv_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel]) {
         double tv = 0.;
         ASSUME(nchannel <= 3);
@@ -112,6 +124,7 @@ static double compute_step_tv_c(unsigned w, unsigned h, unsigned nchannel, struc
         return tv;
 }
 
+// compute objective gradient for second order TGV for one pixel
 static void compute_step_tv2_inner_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], float alpha, unsigned x, unsigned y, double *tv2) {
         float g_xxs[3] = {0};
         float g_xy_syms[3] = {0};
@@ -120,13 +133,13 @@ static void compute_step_tv2_inner_c(unsigned w, unsigned h, unsigned nchannel, 
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];
 
-                // backward x
+                // backward difference x
                 g_xxs[c] = x <= 0 ? 0. : *p(aux->temp[0], x, y, w, h) - *p(aux->temp[0], x-1, y, w, h);
-                // backward x
+                // backward difference x
                 float g_yx = x <= 0 ? 0. : *p(aux->temp[1], x, y, w, h) - *p(aux->temp[1], x-1, y, w, h);
-                // backward y
+                // backward difference y
                 float g_xy = y <= 0 ? 0. : *p(aux->temp[0], x, y, w, h) - *p(aux->temp[0], x, y-1, w, h);
-                // backward y
+                // backward difference y
                 g_yys[c] = y <= 0 ? 0. : *p(aux->temp[1], x, y, w, h) - *p(aux->temp[1], x, y-1, w, h);
                 // symmetrize
                 g_xy_syms[c] = (g_xy + g_yx) / 2.;
@@ -139,9 +152,9 @@ static void compute_step_tv2_inner_c(unsigned w, unsigned h, unsigned nchannel, 
         g2_norm = sqrtf(g2_norm);
 
         alpha = alpha * 1./sqrtf(nchannel);
-        *tv2 += alpha * g2_norm;
+        *tv2 += alpha * g2_norm; // objective function
 
-        // compute derivatives
+        // compute derivatives (see notes)
         if(g2_norm != 0.) {
                 for(unsigned c = 0; c < nchannel; c++) {
                         float g_xx = g_xxs[c];
@@ -172,6 +185,7 @@ static void compute_step_tv2_inner_c(unsigned w, unsigned h, unsigned nchannel, 
         }
 }
 
+// compute objective gradient for second order TGV
 static double compute_step_tv2_c(unsigned w, unsigned h, unsigned nchannel, struct aux auxs[nchannel], float alpha) {
         double tv2 = 0.;
         for(unsigned y = 0; y < h; y++) {
@@ -182,6 +196,7 @@ static double compute_step_tv2_c(unsigned w, unsigned h, unsigned nchannel, stru
         return tv2;
 }
 
+// compute Euclidean norm
 static double compute_norm(unsigned w, unsigned h, float *data) {
         double norm = 0.;
         for(unsigned i = 0; i < h * w; i++) {
@@ -190,8 +205,8 @@ static double compute_norm(unsigned w, unsigned h, float *data) {
         return sqrtf(norm);
 }
 
+// make step in the direction of the objective gradient with distance step_size
 static void compute_do_step(unsigned w, unsigned h, float *fdata, float *obj_gradient, float step_size) {
-        // do step (normalized)
         float norm = compute_norm(w, h, obj_gradient);
         if(norm != 0.) {
                 for(unsigned i = 0; i < h * w; i++) {
@@ -204,6 +219,7 @@ static void compute_do_step(unsigned w, unsigned h, float *fdata, float *obj_gra
 #include "compute_simd_step.c"
 #endif
 
+// compute objective gradient and make step
 static double compute_step(
         unsigned w, unsigned h,
         unsigned nchannel,
@@ -251,12 +267,14 @@ static double compute_step(
                 compute_do_step(w, h, aux->fdata, aux->obj_gradient, step_size);
         }
 
+        // log objective values
         double objective = (tv + tv2 + prob_dist) / total_alpha;
         logger_log(log, objective, prob_dist, tv, tv2);
 
         return objective;
 }
 
+// initialize working buffers
 static void aux_init(unsigned w, unsigned h, struct coef *coef, struct aux *aux) {
         float *cos = alloc_real(coef->h * coef->w);
         unsigned blocks = (coef->h / 8) * (coef->w / 8);
@@ -291,6 +309,7 @@ static void aux_init(unsigned w, unsigned h, struct coef *coef, struct aux *aux)
         aux->fista = fista;
 }
 
+// destroy working buffers, except the fdata that is returned
 static void aux_destroy(struct aux *aux) {
         free_real(aux->cos);
         for(unsigned i = 0; i < 2; i++) {
@@ -300,6 +319,7 @@ static void aux_destroy(struct aux *aux) {
         free_real(aux->fista);
 }
 
+// clamp the DCT values to interval that quantizes to our jpg
 POSSIBLY_UNUSED static void clamp_dct_c(struct coef *coef, float *boxed, unsigned blocks) {
         for(unsigned i = 0; i < blocks; i++) {
                 for(unsigned j = 0; j < 64; j++) {
@@ -310,6 +330,7 @@ POSSIBLY_UNUSED static void clamp_dct_c(struct coef *coef, float *boxed, unsigne
         }
 }
 
+// compute projection of data onto the feasible set defined by our jpg
 static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct coef *coef) {
         unsigned blocks = (coef->h / 8) * (coef->w / 8);
         float *subsampled;
@@ -322,6 +343,8 @@ static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct c
                 subsampled = aux->fdata;
         }
 
+        // downsample and keep the difference
+        // more formally, decompose each subsampling block in the direction of our subsampling vector (a vector of ones)
         if(resample) {
                 for(unsigned cy = 0; cy < coef->h; cy++) {
                         for(unsigned cx = 0; cx < coef->w; cx++) {
@@ -346,6 +369,7 @@ static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct c
                 }
         }
 
+        // project onto our DCT box
         box(subsampled, boxed, coef->w, coef->h);
 
         for(unsigned i = 0; i < blocks; i++) {
@@ -354,7 +378,7 @@ static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct c
 
         POSSIBLY_SIMD(clamp_dct)(coef, boxed, blocks);
 
-        memcpy(aux->cos, boxed, coef->w * coef->h * sizeof(float));
+        memcpy(aux->cos, boxed, coef->w * coef->h * sizeof(float)); // save a copy of the DCT values for step_prob
 
         for(unsigned i = 0; i < blocks; i++) {
                 idct8x8s(&boxed[i*64]);
@@ -362,6 +386,7 @@ static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct c
 
         unbox(boxed, subsampled, coef->w, coef->h);
 
+        // add back the difference (orthogonal to our subsampling vector)
         if(resample) {
                 for(unsigned cy = 0; cy < coef->h; cy++) {
                         for(unsigned cx = 0; cx < coef->w; cx++) {
@@ -378,6 +403,7 @@ static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct c
         }
 }
 
+// subgradient method with iteration steps
 void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log, struct progressbar *pb, float weight, float pweight[nchannel], unsigned iterations) {
         unsigned h = 0;
         unsigned w = 0;
@@ -388,16 +414,18 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
         }
         ASSUME(w % 8 == 0);
         ASSUME(h % 8 == 0);
+        // working buffers per channel
         struct aux *auxs = malloc(sizeof(*auxs) * nchannel);
         for(unsigned c = 0; c < nchannel; c++) {
                 aux_init(w, h, &coefs[c], &auxs[c]);
         }
 
-        float radius = sqrtf(w*h) / 2;
+        float radius = sqrtf(w*h) / 2; // radius of [-0.5, 0.5]^(w*h)
         float t = 1;
         for(unsigned i = 0; i < iterations; i++) {
                 log->iteration = i;
 
+                // FISTA
                 float tnext = (1 + sqrtf(1 + 4 * sqr(t))) / 2;
                 float factor = (t - 1) / tnext;
                 for(unsigned c = 0; c < nchannel; c++) {
@@ -409,7 +437,9 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
                 }
                 t = tnext;
 
+                // take a step
                 compute_step(w, h, nchannel, coefs, auxs, radius / sqrtf(1 + iterations), weight, pweight, log);
+                // project back onto feasible set
                 OPENMP(parallel for schedule(dynamic))
                 for(unsigned c = 0; c < nchannel; c++) {
                         compute_projection(w, h, &auxs[c], &coefs[c]);
@@ -419,7 +449,7 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
                         progressbar_inc(pb);
                 }
         }
-
+        // return result
         for(unsigned c = 0; c < nchannel; c++) {
                 struct aux *aux = &auxs[c];
                 struct coef *coef = &coefs[c];

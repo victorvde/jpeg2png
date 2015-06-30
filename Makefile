@@ -15,6 +15,7 @@ WINDOWS=0
 # VARIABLES
 CFLAGS+=-std=c11 -pedantic
 CFLAGS+=-msse2 -mfpmath=sse
+CFLAGS+=-g
 WARN_FLAGS+=-Wall -Wextra -Winline -Wshadow
 NO_WARN_FLAGS+=-w
 CC?=$(HOST)gcc
@@ -44,16 +45,15 @@ endif
 
 ifeq ($(DEBUG),1)
 CFLAGS+=-Og -DDEBUG
-BFLAGS+=-pg -g
+BFLAGS+=-pg
 else
 CFLAGS+=-O3 -DNDEBUG
-LDFLAGS+=-s
 endif
 
 ifeq ($(WINDOWS),1)
 HOST=i686-w64-mingw32-
 EXE=.exe
-LDFLAGS+=-static
+LDFLAGS+=-static -s
 
 RES+=icon.rc.o
 endif

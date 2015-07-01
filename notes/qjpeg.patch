@@ -1,0 +1,54 @@
+diff -ru -x out qjpeg/FindNetpbm.cmake qjpeg-patched/FindNetpbm.cmake
+--- qjpeg/FindNetpbm.cmake	2007-12-08 23:03:12.000000000 +0100
++++ qjpeg-patched/FindNetpbm.cmake	2015-07-01 01:45:27.084401628 +0200
+@@ -10,7 +10,9 @@
+ FIND_PATH(NETPBM_INCLUDE_DIR pam.h
+ /usr/local/include
+ /usr/include
++/usr/include/netpbm
+ )
++include_directories(${NETPBM_INCLUDE_DIR})
+ 
+ SET(NETPBM_NAMES ${NETPBM_NAMES} netpbm)
+ FIND_LIBRARY(NETPBM_LIBRARY
+Only in qjpeg-patched/gui/lang: qjpegrest_en.qm
+diff -ru -x out qjpeg/gui/QChain.cpp qjpeg-patched/gui/QChain.cpp
+--- qjpeg/gui/QChain.cpp	2007-12-08 23:03:12.000000000 +0100
++++ qjpeg-patched/gui/QChain.cpp	2015-07-01 01:46:57.987732666 +0200
+@@ -4,6 +4,8 @@
+ 
+     Please find the license in the provided LICENSE file.
+ */
++#include <assert.h>
++
+ #include <QGraphicsScene>
+ #include <QGraphicsView>
+ #include <QTreeWidget>
+diff -ru -x out qjpeg/ogdl/OGDLChars.h qjpeg-patched/ogdl/OGDLChars.h
+--- qjpeg/ogdl/OGDLChars.h	2007-12-08 23:03:13.000000000 +0100
++++ qjpeg-patched/ogdl/OGDLChars.h	2015-07-01 01:52:46.151057205 +0200
+@@ -8,8 +8,8 @@
+ 
+ namespace OGDLChars
+ {
+-    bool OGDLChars::isspace(QChar c);
+-    bool OGDLChars::isbreak(QChar c);
+-    bool OGDLChars::isseparator(QChar c);
+-    bool OGDLChars::ischarword(QChar c);
++    bool isspace(QChar c);
++    bool isbreak(QChar c);
++    bool isseparator(QChar c);
++    bool ischarword(QChar c);
+ }
+diff -ru -x out qjpeg/ogdl/Stream2Parser.cpp qjpeg-patched/ogdl/Stream2Parser.cpp
+--- qjpeg/ogdl/Stream2Parser.cpp	2007-12-08 23:03:13.000000000 +0100
++++ qjpeg-patched/ogdl/Stream2Parser.cpp	2015-07-01 01:47:58.604397798 +0200
+@@ -4,6 +4,8 @@
+ 
+     Please find the license in the provided LICENSE file.
+ */
++#include <assert.h>
++
+ #include <QString>
+ #include <QTextStream>
+ 

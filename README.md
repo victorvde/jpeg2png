@@ -176,7 +176,7 @@ This is the source for the DCT deviations model. Uniform distribution for the er
 
 ## Links
 
-[qjpegrest](http://viric.name/soft/qjpegrest/) is a tool that lets you try many different JPEG restoration methods (TV based, band-pass based and Huber MRF based). I didn't get it to compile because it's old and I'm allergic to CMake, but I learned from the code.
+[qjpegrest](http://viric.name/soft/qjpegrest/) is a tool that lets you try many different JPEG restoration methods (TV based, band-pass based and Huber MRF based). I learned from the code. See notes/qjpegrest.txt for installation help.
 
 ## License
 

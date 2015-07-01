@@ -1,0 +1,8 @@
+pacman -S qt4 netpbm # you probably already have libjpeg
+tar xvfz qjpegrest-0.5.tar.gz
+patch -p0 < qjpeg.patch
+cd qjpeg
+mkdir out
+cd out
+QT_SELECT=4 cmake ..
+make

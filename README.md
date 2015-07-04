@@ -11,7 +11,7 @@ jpeg2png is smarter and fills the missing information to create the smoothest po
 * Top left: [original](../images/lena.png) Lena image
 * Top right: original, 64x64 detail
 * Bottom left: [JPEG encoded](../images/lena.jpg) at 10% quality with 4:2:0 chroma subsampling using the GIMP, 64x64 detail
-* Bottom right: [JPEG decoded](../images/lena_restored.jpg) with jpeg2png using the default settings, 64x64 detail
+* Bottom right: [JPEG decoded](../images/lena_restored.png) with jpeg2png using the default settings, 64x64 detail
 
 ![Hige](/../images/deviantart_tiles.png?raw=true)
 

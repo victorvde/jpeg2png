@@ -405,6 +405,8 @@ static void compute_projection(unsigned w, unsigned h, struct aux *aux, struct c
 
 // subgradient method with iteration steps
 void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log, struct progressbar *pb, float weight, float pweight[nchannel], unsigned iterations) {
+        assert(FLT_ROUNDS == 1);
+
         unsigned h = 0;
         unsigned w = 0;
         for(unsigned c = 0; c < nchannel; c++) {

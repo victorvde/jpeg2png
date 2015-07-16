@@ -51,13 +51,23 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
                 jpeg_component_info *i = &d.comp_info[c];
                 unsigned h = i->height_in_blocks * 8;
                 unsigned w = i->width_in_blocks * 8;
-                int16_t *data = malloc(w * h * sizeof(*data));
-                jpeg->coefs[c].w = w;
-                jpeg->coefs[c].h = h;
-                jpeg->coefs[c].w_samp = d.max_h_samp_factor / i->h_samp_factor;
-                jpeg->coefs[c].h_samp = d.max_v_samp_factor / i->v_samp_factor;
-                jpeg->coefs[c].data = data;
+                struct coef *coef = &jpeg->coefs[c];
+                coef->w = w;
+                coef->h = h;
+                coef->w_samp = d.max_h_samp_factor / i->h_samp_factor;
+                coef->h_samp = d.max_v_samp_factor / i->v_samp_factor;
+                if(coef->h / 8 != (jpeg->h / coef->h_samp + 7) / 8) {
+                        die("jpeg invalid coef h size");
+                }
+                if(coef->w / 8 != (jpeg->w / coef->w_samp + 7) / 8) {
+                        die("jpeg invalid coef w size");
+                }
+                if(SIZE_MAX / coef->h / coef->w / coef->h_samp / coef->w_samp < 6) {
+                        die("jpeg is too big to fit in memory");
+                }
+                int16_t *data = malloc(sizeof(*data) * h * w);
                 if(!data) { die("could not allocate memory for coefs"); }
+                coef->data = data;
                 for(unsigned y = 0; y < h / 8; y++) {
                         JBLOCKARRAY b = d.mem->access_virt_barray((void*)&d, coefs[c], y, 1, false);
                         for(unsigned x = 0; x < w / 8; x++) {

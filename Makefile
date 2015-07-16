@@ -9,6 +9,7 @@ PRAGMA_FP_CONTRACT=0
 SIMD=1
 OPENMP=1
 DEBUG=0
+PROFILE=0
 SAVE_ASM=0
 WINDOWS=0
 
@@ -45,9 +46,12 @@ endif
 
 ifeq ($(DEBUG),1)
 CFLAGS+=-Og -DDEBUG
-BFLAGS+=-pg
 else
 CFLAGS+=-O3 -DNDEBUG
+endif
+
+ifeq ($(PROFILE),1)
+BFLAGS+=-pg
 endif
 
 ifeq ($(WINDOWS),1)

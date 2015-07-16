@@ -130,11 +130,11 @@ void decode_file(const char* infile, const char *outfile, unsigned iterations[3]
         }
         for(unsigned i = 0; i < 3; i++) {
                 struct coef *coef = &jpeg.coefs[i];
-                float *temp = alloc_real(coef->h * coef->w);
+                float *temp = alloc_simd(sizeof(float) * coef->h * coef->w);
 
                 unbox(coef->fdata, temp, coef->w, coef->h);
 
-                free_real(coef->fdata);
+                free_simd(coef->fdata);
                 coef->fdata = temp;
         }
 
@@ -154,7 +154,7 @@ void decode_file(const char* infile, const char *outfile, unsigned iterations[3]
 
         // fixup luma range
         struct coef *coef = &jpeg.coefs[0];
-        for(unsigned i = 0; i < coef->h * coef->w; i++) {
+        for(size_t i = 0; i < (size_t)coef->h * coef->w; i++) {
                 coef->fdata[i] += 128.;
         }
 
@@ -166,7 +166,7 @@ void decode_file(const char* infile, const char *outfile, unsigned iterations[3]
 
         // clean up
         for(unsigned i = 0; i < 3; i++) {
-                free_real(jpeg.coefs[i].fdata);
+                free_simd(jpeg.coefs[i].fdata);
                 free(jpeg.coefs[i].data);
         }
 }

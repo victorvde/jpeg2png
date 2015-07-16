@@ -50,10 +50,10 @@ static double compute_step_prob_simd(unsigned w, unsigned h, float alpha, struct
                                         unsigned in_x = j % 8;
                                         unsigned x = block_x * 8 + in_x;
                                         unsigned y = block_y * 8 + in_y;
-                                        __m128 obj = _mm_load_ps(&obj_gradient[y*w+x]);
+                                        __m128 obj = _mm_load_ps(p(obj_gradient, x, y, w, h));
                                         __m128 cosb_j = _mm_load_ps(&cosb[j]);
                                         obj += malpha * cosb_j;
-                                        _mm_store_ps(&obj_gradient[y*w+x], obj);
+                                        _mm_store_ps(p(obj_gradient, x, y, w, h), obj);
                                 }
                         }
                 }

@@ -77,7 +77,7 @@ static inline void check(unsigned x, unsigned y, unsigned w, unsigned h) {
 // index image with bounds check
 static inline float *p(float *in, unsigned x, unsigned y, unsigned w, unsigned h) {
         check(x, y, w, h);
-        return &in[y * w + x];
+        return &in[(size_t)y * w + x];
 }
 
 // convenience
@@ -86,18 +86,18 @@ static inline float sqr(float x) {
 }
 
 // allocate aligned buffer for simd
-static inline float *alloc_real(size_t n) {
+static inline void *alloc_simd(size_t n) {
 #if defined(_WIN32)
-        float *f = _aligned_malloc(n * sizeof(float), 16);
+        void *p = _aligned_malloc(n, 16);
 #else
-        float *f = aligned_alloc(16, n * sizeof(float));
+        void *p = aligned_alloc(16, n);
 #endif
-        ASSUME_ALIGNED(f);
-        if(!f) { die("allocation error"); }
-        return f;
+        if(!p) { die("allocation error"); }
+        ASSUME_ALIGNED(p);
+        return p;
 }
 
-static inline void free_real(float *p) {
+static inline void free_simd(void *p) {
 #ifdef _WIN32
         _aligned_free(p);
 #else

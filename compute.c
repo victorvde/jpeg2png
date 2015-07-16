@@ -199,7 +199,7 @@ static double compute_step_tv2_c(unsigned w, unsigned h, unsigned nchannel, stru
 // compute Euclidean norm
 static double compute_norm(unsigned w, unsigned h, float *data) {
         double norm = 0.;
-        for(unsigned i = 0; i < h * w; i++) {
+        for(size_t i = 0; i < (size_t)h * w; i++) {
                 norm += sqr(data[i]);
         }
         return sqrtf(norm);
@@ -209,7 +209,7 @@ static double compute_norm(unsigned w, unsigned h, float *data) {
 static void compute_do_step(unsigned w, unsigned h, float *fdata, float *obj_gradient, float step_size) {
         float norm = compute_norm(w, h, obj_gradient);
         if(norm != 0.) {
-                for(unsigned i = 0; i < h * w; i++) {
+                for(size_t i = 0; i < (size_t)h * w; i++) {
                         fdata[i] = fdata[i] - step_size * (obj_gradient[i] /  norm);
                 }
         }
@@ -236,7 +236,7 @@ static double compute_step(
                 struct coef *coef = &coefs[c];
 
                 // initialize gradient
-                for(unsigned i = 0; i < h * w; i++) {
+                for(size_t i = 0; i < (size_t)h * w; i++) {
                         aux->obj_gradient[i] = 0.;
                 }
 
@@ -276,7 +276,7 @@ static double compute_step(
 
 // initialize working buffers
 static void aux_init(unsigned w, unsigned h, struct coef *coef, struct aux *aux) {
-        float *cos = alloc_real(coef->h * coef->w);
+        float *cos = alloc_simd(sizeof(float) * coef->h * coef->w);
         unsigned blocks = (coef->h / 8) * (coef->w / 8);
         for(unsigned i = 0; i < blocks; i++) {
                 for(unsigned j = 0; j < 64; j++) {
@@ -286,13 +286,13 @@ static void aux_init(unsigned w, unsigned h, struct coef *coef, struct aux *aux)
         aux->cos = cos;
 
         for(unsigned i = 0; i < 2; i++) {
-                float *t = alloc_real(h * w);
+                float *t = alloc_simd(sizeof(float) * h * w);
                 aux->temp[i] = t;
         }
-        float *obj_gradient = alloc_real(h * w);
+        float *obj_gradient = alloc_simd(sizeof(float) * h * w);
         aux->obj_gradient = obj_gradient;
 
-        float *fdata = alloc_real(h * w);
+        float *fdata = alloc_simd(sizeof(float) * h * w);
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
                         unsigned cy = MIN(y / coef->h_samp, coef->h-1);
@@ -301,22 +301,22 @@ static void aux_init(unsigned w, unsigned h, struct coef *coef, struct aux *aux)
                 }
         }
         aux->fdata = fdata;
-        free_real(coef->fdata);
+        free_simd(coef->fdata);
         coef->fdata = NULL;
 
-        float *fista = alloc_real(h * w);
-        memcpy(fista, fdata, sizeof(float) * w * h);
+        float *fista = alloc_simd(sizeof(float) * h * w);
+        memcpy(fista, fdata, sizeof(float) * h * w);
         aux->fista = fista;
 }
 
 // destroy working buffers, except the fdata that is returned
 static void aux_destroy(struct aux *aux) {
-        free_real(aux->cos);
+        free_simd(aux->cos);
         for(unsigned i = 0; i < 2; i++) {
-                free_real(aux->temp[i]);
+                free_simd(aux->temp[i]);
         }
-        free_real(aux->obj_gradient);
-        free_real(aux->fista);
+        free_simd(aux->obj_gradient);
+        free_simd(aux->fista);
 }
 
 // clamp the DCT values to interval that quantizes to our jpg
@@ -422,7 +422,7 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
                 aux_init(w, h, &coefs[c], &auxs[c]);
         }
 
-        float radius = sqrtf(w*h) / 2; // radius of [-0.5, 0.5]^(w*h)
+        float radius = sqrtf((float)h * (float)w) / 2; // radius of [-0.5, 0.5]^(h*w)
         float t = 1;
         for(unsigned i = 0; i < iterations; i++) {
                 log->iteration = i;
@@ -432,7 +432,7 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
                 float factor = (t - 1) / tnext;
                 for(unsigned c = 0; c < nchannel; c++) {
                         struct aux *aux = &auxs[c];
-                        for(unsigned j = 0; j < w * h; j++) {
+                        for(size_t j = 0; j < (size_t)h * w; j++) {
                                 aux->fista[j] = aux->fdata[j] + factor * (aux->fdata[j] - aux->fista[j]);
                         }
                         SWAP(float *, aux->fdata, aux->fista);

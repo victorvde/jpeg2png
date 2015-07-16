@@ -71,7 +71,7 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
 
 // decode DCT coefficients into image data
 void decode_coefficients(struct coef *coef) {
-        coef->fdata = alloc_real(coef->h * coef->w);
+        coef->fdata = alloc_simd(sizeof(float) * coef->h * coef->w);
         unsigned blocks = (coef->h / 8) * (coef->w / 8);
         for(unsigned i = 0; i < blocks; i++) {
                 for(unsigned j = 0; j < 64; j++) {

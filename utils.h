@@ -65,7 +65,7 @@ void compare(const char *name, unsigned w, unsigned h, float *new, float *old);
 #define STOP_TIMER(n) stop_timer(macro_timer_##n, #n);
 
 // bounds check
-inline void check(unsigned x, unsigned y, unsigned w, unsigned h) {
+static inline void check(unsigned x, unsigned y, unsigned w, unsigned h) {
         ASSUME(x < w);
         ASSUME(y < h);
         (void) x;
@@ -75,18 +75,18 @@ inline void check(unsigned x, unsigned y, unsigned w, unsigned h) {
 }
 
 // index image with bounds check
-inline float *p(float *in, unsigned x, unsigned y, unsigned w, unsigned h) {
+static inline float *p(float *in, unsigned x, unsigned y, unsigned w, unsigned h) {
         check(x, y, w, h);
         return &in[y * w + x];
 }
 
 // convenience
-inline float sqr(float x) {
+static inline float sqr(float x) {
         return x * x;
 }
 
 // allocate aligned buffer for simd
-inline float *alloc_real(size_t n) {
+static inline float *alloc_real(size_t n) {
 #if defined(_WIN32)
         float *f = _aligned_malloc(n * sizeof(float), 16);
 #else
@@ -97,7 +97,7 @@ inline float *alloc_real(size_t n) {
         return f;
 }
 
-inline void free_real(float *p) {
+static inline void free_real(float *p) {
 #ifdef _WIN32
         _aligned_free(p);
 #else

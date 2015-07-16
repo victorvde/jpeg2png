@@ -45,8 +45,8 @@ POSSIBLY_UNUSED static double compute_step_prob_c(unsigned w, unsigned h, float 
                         float *cosb = &cos[i*64];
                         for(unsigned j = 0; j < 64; j++) {
                                 cosb[j] -= (float)coef->data[i*64+j] * coef->quant_table[j];
-                                prob_dist += 0.5 * sqr(cosb[j] / coef->quant_table[j]); // objective function
-                                cosb[j] = cosb[j] / sqr((float)coef->quant_table[j]); // derivative
+                                prob_dist += 0.5 * sqf(cosb[j] / coef->quant_table[j]); // objective function
+                                cosb[j] = cosb[j] / sqf((float)coef->quant_table[j]); // derivative
                         }
                         idct8x8s(cosb);
                         // unbox and possibly upsample derivative
@@ -83,8 +83,8 @@ static void compute_step_tv_inner_c(unsigned w, unsigned h, unsigned nchannel, s
         // norm
         float g_norm = 0.;
         for(unsigned c = 0; c < nchannel; c++) {
-                g_norm += sqr(g_xs[c]);
-                g_norm += sqr(g_ys[c]);
+                g_norm += sqf(g_xs[c]);
+                g_norm += sqf(g_ys[c]);
         }
         g_norm = sqrtf(g_norm);
         float alpha = 1./sqrtf(nchannel);
@@ -147,7 +147,7 @@ static void compute_step_tv2_inner_c(unsigned w, unsigned h, unsigned nchannel, 
         // norm
         float g2_norm = 0.;
         for(unsigned c = 0; c < nchannel; c++) {
-                g2_norm += sqr(g_xxs[c]) + 2 * sqr(g_xy_syms[c]) + sqr(g_yys[c]);
+                g2_norm += sqf(g_xxs[c]) + 2 * sqf(g_xy_syms[c]) + sqf(g_yys[c]);
         }
         g2_norm = sqrtf(g2_norm);
 
@@ -200,7 +200,7 @@ static double compute_step_tv2_c(unsigned w, unsigned h, unsigned nchannel, stru
 static double compute_norm(unsigned w, unsigned h, float *data) {
         double norm = 0.;
         for(size_t i = 0; i < (size_t)h * w; i++) {
-                norm += sqr(data[i]);
+                norm += sqf(data[i]);
         }
         return sqrtf(norm);
 }
@@ -428,7 +428,7 @@ void compute(unsigned nchannel, struct coef coefs[nchannel], struct logger *log,
                 log->iteration = i;
 
                 // FISTA
-                float tnext = (1 + sqrtf(1 + 4 * sqr(t))) / 2;
+                float tnext = (1 + sqrtf(1 + 4 * sqf(t))) / 2;
                 float factor = (t - 1) / tnext;
                 for(unsigned c = 0; c < nchannel; c++) {
                         struct aux *aux = &auxs[c];

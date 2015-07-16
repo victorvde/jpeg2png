@@ -81,7 +81,7 @@ static inline float *p(float *in, unsigned x, unsigned y, unsigned w, unsigned h
 }
 
 // convenience
-static inline float sqr(float x) {
+static inline float sqf(float x) {
         return x * x;
 }
 

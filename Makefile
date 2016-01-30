@@ -1,7 +1,11 @@
 # Reset implicit rules as if using -r
 .SUFFIXES:
 # Reset implicit variables as if using -R
-$(foreach var,$(filter-out .% MAKE% SUFFIXES,$(.VARIABLES)),$(if $(findstring $(origin $(var)),default),$(eval undefine $(var))))
+$(foreach var,$(filter-out .% MAKE% SUFFIXES,$(.VARIABLES)),\
+  $(if $(findstring $(origin $(var)),default),\
+    $(if $(filter undefine,$(.FEATURES)),\
+      $(eval undefine $(var)),\
+      $(eval $(var)=))))
 
 # Build options
 BUILTINS=1
@@ -19,8 +23,12 @@ CFLAGS+=-msse2 -mfpmath=sse
 CFLAGS+=-g
 WARN_FLAGS+=-Wall -Wextra -Winline -Wshadow
 NO_WARN_FLAGS+=-w
-CC?=$(HOST)gcc
-WINDRES?=$(HOST)windres
+ifeq ($(CC),)
+CC=$(HOST)gcc
+endif
+ifeq ($(WINDRES),)
+WINDRES=$(HOST)windres
+endif
 LIBS+=-ljpeg -lpng -lm -lz
 OBJS+=jpeg2png.o utils.o jpeg.o png.o box.o compute.o logger.o progressbar.o fp_exceptions.o gopt/gopt.o ooura/dct.o
 HOST=

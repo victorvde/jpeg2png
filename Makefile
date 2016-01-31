@@ -66,7 +66,7 @@ ifeq ($(WINDOWS),1)
 HOST=i686-w64-mingw32-
 EXE=.exe
 LDFLAGS+=-static -s
-
+CFLAGS+=-mstackrealign # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=48659
 RES+=icon.rc.o
 endif
 

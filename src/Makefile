@@ -96,6 +96,7 @@ gopt/gopt.o: gopt/gopt.c gopt/gopt.h Makefile
 	$(WINDRES) $< $@
 
 clean:
+	rm -f *.o *.d */*.o */*.d jpeg2png$(EXE)
 	git clean -Xf
 
 install: all

@@ -7,6 +7,9 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
+#ifndef _WIN32
+#include <malloc.h>
+#endif
 
 void die_message_start();
 noreturn void die(const char *msg, ...);
@@ -90,7 +93,7 @@ static inline void *alloc_simd(size_t n) {
 #if defined(_WIN32)
         void *p = _aligned_malloc(n, 16);
 #else
-        void *p = aligned_alloc(16, n);
+        void *p = memalign(16, n);
 #endif
         if(!p) { die("allocation error"); }
         ASSUME_ALIGNED(p);

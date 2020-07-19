@@ -8,12 +8,16 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void die_message_start();
 noreturn void die(const char *msg, ...);
 noreturn void die_perror(const char *msg, ...);
 clock_t start_timer(const char *name);
 void stop_timer(clock_t t, const char *n);
-void compare(const char *name, unsigned w, unsigned h, float *new, float *old);
+void compare(const char *name, unsigned w, unsigned h, float *bnew, float *bold);
 
 // Convenience macros
 #define MIN(a, b)  (((a) < (b)) ? (a) : (b))
@@ -104,5 +108,9 @@ static inline void free_simd(void *p) {
         free(p);
 #endif
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -52,16 +52,16 @@ void stop_timer(clock_t t, const char *n) {
 }
 
 // compare image sized buffers, e.g. c and simd versions
-void compare(const char * name, unsigned w, unsigned h, float *new, float *old) {
+void compare(const char * name, unsigned w, unsigned h, float *bnew, float *bold) {
         const float epsilon = 1.e-6;
         for(unsigned y = 0; y < h; y++) {
                 for(unsigned x = 0; x < w; x++) {
-                        float new1 = *p(new, x, y, w, h);
-                        float old1 = *p(old, x, y, w, h);
-                        if(isnan(new1)) {
+                        float bnew1 = *p(bnew, x, y, w, h);
+                        float bold1 = *p(bold, x, y, w, h);
+                        if(isnan(bnew1)) {
                                 die("%u, %u is NaN", x, y);
-                        } else if (fabsf(new1 - old1) / old1 > epsilon) {
-                                die("difference at %s %u, %u: %.9e, %.9e\n", name, x, y, new1, old1);
+                        } else if (fabsf(bnew1 - bold1) / bold1 > epsilon) {
+                                die("difference at %s %u, %u: %.9e, %.9e\n", name, x, y, bnew1, bold1);
                         }
                 }
         }

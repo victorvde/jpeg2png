@@ -19,6 +19,11 @@ clock_t start_timer(const char *name);
 void stop_timer(clock_t t, const char *n);
 void compare(const char *name, unsigned w, unsigned h, float *bnew, float *bold);
 
+#ifdef BOOST_ALIGNED_ALLOC
+void *boost_aligned_alloc(size_t alignment, size_t size);
+void boost_aligned_free(void *p);
+#endif
+
 // Convenience macros
 #define MIN(a, b)  (((a) < (b)) ? (a) : (b))
 #define MAX(a, b)  (((a) > (b)) ? (a) : (b))
@@ -94,7 +99,11 @@ static inline void *alloc_simd(size_t n) {
 #if defined(_WIN32)
         void *p = _aligned_malloc(n, 16);
 #else
+#if defined BOOST_ALIGNED_ALLOC
+        void *p = boost_aligned_alloc(16, n);
+#else
         void *p = aligned_alloc(16, n);
+#endif
 #endif
         if(!p) { die("allocation error"); }
         ASSUME_ALIGNED(p);
@@ -105,7 +114,11 @@ static inline void free_simd(void *p) {
 #ifdef _WIN32
         _aligned_free(p);
 #else
+#if defined BOOST_ALIGNED_ALLOC
+        boost_aligned_free(p);
+#else
         free(p);
+#endif
 #endif
 }
 

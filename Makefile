@@ -8,19 +8,23 @@ $(foreach var,$(filter-out .% MAKE% SUFFIXES,$(.VARIABLES)),\
       $(eval $(var)=))))
 
 # Build options
-BUILTINS=1
-PRAGMA_FP_CONTRACT=0
-SIMD=1
-OPENMP=1
-DEBUG=0
-PROFILE=0
-SAVE_ASM=0
-WINDOWS=0
+BUILTINS?=1
+PRAGMA_FP_CONTRACT?=0
+SIMD?=1
+OPENMP?=1
+DEBUG?=0
+PROFILE?=0
+SAVE_ASM?=0
+WINDOWS?=0
+MACOS?=0
+BOOST?=0
 
 # VARIABLES
 CFLAGS+=-std=c11 -pedantic
 CFLAGS+=-msse2 -mfpmath=sse
 CFLAGS+=-g
+CXXFLAGS+=-msse2 -mfpmath=sse -std=c++17
+CXXFLAGS+=-g
 WARN_FLAGS+=-Wall -Wextra -Winline -Wshadow
 NO_WARN_FLAGS+=-w
 ifeq ($(CC),)
@@ -70,6 +74,19 @@ CFLAGS+=-mstackrealign # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=48659
 RES+=icon.rc.o
 endif
 
+ifeq ($(MACOS),1)
+HOMEBREW:=$(shell brew --prefix)
+CPPFLAGS+=-I$(HOMEBREW)/include
+LDFLAGS+=-L$(HOMEBREW)/lib
+
+ifeq ($(BOOST),1)
+HOMEBREW_BOOST:=$(shell brew --prefix boost)
+CPPFLAGS+=-DBOOST_ALIGNED_ALLOC -I$(HOMEBREW_BOOST)/include
+LDFLAGS+=-L$(HOMEBREW_BOOST)/lib
+OBJS+=boost_aligned_alloc.o
+endif
+endif
+
 ifeq ($(SAVE_ASM),1)
 CFLAGS+=-save-temps -masm=intel -fverbose-asm
 endif
@@ -82,15 +99,22 @@ LDFLAGS+=$(BFLAGS)
 all: jpeg2png$(EXE)
 
 jpeg2png$(EXE): $(OBJS) $(RES) Makefile
+ifeq ($(BOOST),0)
 	$(CC) $(OBJS) $(RES) -o $@ $(LDFLAGS) $(LIBS)
+else
+	$(CXX) $(OBJS) $(RES) -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+endif
 
 -include $(OBJS:.o=.d)
 
 gopt/gopt.o: gopt/gopt.c gopt/gopt.h Makefile
-	$(CC) $< -c -o $@ $(CFLAGS) $(NO_WARN_FLAGS)
+	$(CC) $< -c -o $@ $(CFLAGS) $(CPPFLAGS) $(NO_WARN_FLAGS)
 
 %.o: %.c Makefile
-	$(CC) -MP -MMD $< -c -o $@ $(CFLAGS) $(WARN_FLAGS)
+	$(CC) -MP -MMD $< -c -o $@ $(CFLAGS) $(CPPFLAGS) $(WARN_FLAGS)
+
+%.o: %.cpp Makefile
+	$(CXX) -MP -MMD $< -c -o $@ $(CXXFLAGS) $(CPPFLAGS) $(WARN_FLAGS)
 
 %.rc.o: %.rc Makefile
 	$(WINDRES) $< $@

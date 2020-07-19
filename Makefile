@@ -8,14 +8,14 @@ $(foreach var,$(filter-out .% MAKE% SUFFIXES,$(.VARIABLES)),\
       $(eval $(var)=))))
 
 # Build options
-BUILTINS=1
-PRAGMA_FP_CONTRACT=0
-SIMD=1
-OPENMP=1
-DEBUG=0
-PROFILE=0
-SAVE_ASM=0
-WINDOWS=0
+BUILTINS?=1
+PRAGMA_FP_CONTRACT?=0
+SIMD?=1
+OPENMP?=1
+DEBUG?=0
+PROFILE?=0
+SAVE_ASM?=0
+WINDOWS?=0
 
 # VARIABLES
 CFLAGS+=-std=c11 -pedantic

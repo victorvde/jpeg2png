@@ -68,6 +68,8 @@ EXE=.exe
 LDFLAGS+=-static -s
 CFLAGS+=-mstackrealign # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=48659
 RES+=icon.rc.o
+else
+CFLAGS+=-D_POSIX_C_SOURCE=200112
 endif
 
 ifeq ($(SAVE_ASM),1)

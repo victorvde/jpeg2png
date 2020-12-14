@@ -124,11 +124,11 @@ void decode_file(const char* infile, const char *outfile, unsigned iterations[3]
         struct jpeg jpeg;
         read_jpeg(in, &jpeg);
         fclose(in);
-        for(unsigned c = 0; c < 3; c++) {
+        for(unsigned c = 0; c < jpeg.c; c++) {
                 struct coef *coef = &jpeg.coefs[c];
                 decode_coefficients(coef);
         }
-        for(unsigned i = 0; i < 3; i++) {
+        for(unsigned i = 0; i < jpeg.c; i++) {
                 struct coef *coef = &jpeg.coefs[i];
                 float *temp = alloc_simd(sizeof(float) * coef->h * coef->w);
 
@@ -139,13 +139,13 @@ void decode_file(const char* infile, const char *outfile, unsigned iterations[3]
         }
 
         // smooth
-        if(all_together) {
+        if(all_together && jpeg.c == 3) {
                 plog->channel = 3;
                 compute(3, jpeg.coefs, plog, pb, weights[0], pweights, iterations[0]);
         } else {
                 struct logger log = *plog;
                 OPENMP(parallel for schedule(dynamic) firstprivate(log))
-                for(unsigned i = 0; i < 3; i++) {
+                for(unsigned i = 0; i < jpeg.c; i++) {
                         log.channel = i;
                         struct coef *coef = &jpeg.coefs[i];
                         compute(1, coef, &log, pb, weights[i], &pweights[i], iterations[i]);
@@ -161,11 +161,14 @@ void decode_file(const char* infile, const char *outfile, unsigned iterations[3]
         // write png
         FILE *out = fopen(outfile, "wb");
         if(!out) { die_perror("could not open output file `%s`", outfile); }
-        write_png(out, jpeg.w, jpeg.h, png_bits, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);
+        if (jpeg.c == 3)
+          write_png(out, jpeg.w, jpeg.h, png_bits, &jpeg.coefs[0], &jpeg.coefs[1], &jpeg.coefs[2]);
+        else
+          write_png(out, jpeg.w, jpeg.h, png_bits, &jpeg.coefs[0], NULL, NULL);
         fclose(out);
 
         // clean up
-        for(unsigned i = 0; i < 3; i++) {
+        for(unsigned i = 0; i < jpeg.c; i++) {
                 free_simd(jpeg.coefs[i].fdata);
                 free(jpeg.coefs[i].data);
         }

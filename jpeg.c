@@ -46,6 +46,8 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
                 memcpy(&(jpeg->coefs[c].quant_table), t->quantval, sizeof(uint16_t) * 64);
         }
 
+#define UPDIV(x,y) ((x + ((y) - 1)) / (y))
+
         jvirt_barray_ptr *coefs = jpeg_read_coefficients(&d);
         for(int c = 0; c < d.num_components; c++) {
                 jpeg_component_info *i = &d.comp_info[c];
@@ -56,10 +58,11 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
                 coef->h = h;
                 coef->w_samp = d.max_h_samp_factor / i->h_samp_factor;
                 coef->h_samp = d.max_v_samp_factor / i->v_samp_factor;
-                if(coef->h / 8 != (jpeg->h / coef->h_samp + 7) / 8) {
+                if(coef->h / 8 != UPDIV(UPDIV(jpeg->h, coef->h_samp), 8)) {
                         die("jpeg invalid coef h size");
                 }
-                if(coef->w / 8 != (jpeg->w / coef->w_samp + 7) / 8) {
+                if(coef->w / 8 != UPDIV(UPDIV(jpeg->w, coef->w_samp), 8)) {
+                        printf("coeg->w = %d, jpeg->w = %d, coef->w_samp = %d\n", coef->w, jpeg->w, coef->w_samp);
                         die("jpeg invalid coef w size");
                 }
                 if(SIZE_MAX / coef->h / coef->w / coef->h_samp / coef->w_samp < 6) {

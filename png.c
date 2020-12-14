@@ -37,8 +37,8 @@ void write_png(FILE *out, unsigned w, unsigned h, unsigned bits, struct coef *y,
         for(unsigned i = 0; i < h; i++) {
                 for(unsigned j = 0; j < w; j++) {
                         float yi = *p(y->fdata, j, i, y->w, y->h);
-                        float cbi = *p(cb->fdata, j, i, cb->w, cb->h);
-                        float cri = *p(cr->fdata, j, i, cr->w, cr->h);
+                        float cbi = cb ? *p(cb->fdata, j, i, cb->w, cb->h) : 0.0;
+                        float cri = cr ? *p(cr->fdata, j, i, cr->w, cr->h) : 0.0;
 
                         // YCbCr -> RGB
                         float bitfactor = (1 << bits) / 256.;

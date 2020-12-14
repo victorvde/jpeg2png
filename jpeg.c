@@ -31,7 +31,9 @@ void read_jpeg(FILE *in, struct jpeg *jpeg) {
         jpeg->h = d.image_height;
         jpeg->w = d.image_width;
 
-        if(d.num_components != 3) { die("only 3 component jpegs are supported"); }
+        jpeg->c = d.num_components;
+        if(d.num_components < 1 || d.num_components > 4)
+          { die("only 3 component jpegs are supported"); }
 
         for(int c = 0; c < d.num_components; c++) {
                 unsigned i = d.comp_info[c].quant_tbl_no;

@@ -7,9 +7,10 @@
 #include "jpeg2png.h"
 
 struct jpeg {
+        unsigned c;
         unsigned h;
         unsigned w;
-        struct coef coefs[3];
+        struct coef coefs[4];
 };
 
 void read_jpeg(FILE *in, struct jpeg *jpeg);
